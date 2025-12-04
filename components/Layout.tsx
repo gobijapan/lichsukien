@@ -34,15 +34,15 @@ const Layout: React.FC<LayoutProps> = ({ currentTab, onTabChange, children, sett
           <div className={`absolute inset-0 transition-colors duration-500 ${settings.darkMode ? 'bg-slate-900/80' : 'bg-black/30'}`}></div>
         </div>
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto relative z-10 pb-24">
+        {/* Main Content Area - Add bottom padding so content isn't hidden behind fixed nav */}
+        <main className="flex-1 overflow-y-auto relative z-10 pb-24 md:pb-28">
           {children}
         </main>
 
-        {/* Glass Bottom Navigation - FIXED POSITION */}
+        {/* Glass Bottom Navigation - FIXED POSITION & SAFE AREA */}
         {currentTab !== 'admin' && (
-          <nav className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-md mx-auto">
-            <div className="glass-dark border-t border-white/10 backdrop-blur-xl flex justify-around items-center py-3 px-2 pb-safe">
+          <nav className="fixed bottom-0 z-50 w-full max-w-md mx-auto">
+            <div className="glass-dark border-t border-white/10 backdrop-blur-xl flex justify-around items-center py-2 pb-safe">
               <NavButton 
                 active={currentTab === 'today'} 
                 onClick={() => onTabChange('today')} 
@@ -84,7 +84,7 @@ const NavButton: React.FC<{active: boolean, onClick: () => void, icon: React.Rea
 }) => (
   <button 
     onClick={onClick}
-    className={`flex flex-col items-center justify-center w-16 h-12 rounded-2xl transition-all duration-300 
+    className={`flex flex-col items-center justify-center w-16 h-14 rounded-2xl transition-all duration-300 
       ${active ? 'text-white shadow-lg backdrop-blur-md transform -translate-y-1' : 'text-white/50 hover:text-white/80'}`}
     style={{ backgroundColor: active ? primaryColor : 'transparent' }}
   >
