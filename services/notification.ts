@@ -10,9 +10,10 @@ export const requestNotificationPermission = async (userId: string) => {
     const permission = await Notification.requestPermission();
     
     if (permission === 'granted') {
-      // Get FCM Token
-      // Removed explicit vapidKey to use default project settings or 'service worker' flow
-      const token = await getToken(messaging);
+      // Get VAPID Key from environment variables (Required for web push)
+      const vapidKey = (import.meta as any).env.VITE_FIREBASE_VAPID_KEY;
+
+      const token = await getToken(messaging, { vapidKey });
 
       if (token) {
         console.log('FCM Token:', token);
@@ -21,6 +22,8 @@ export const requestNotificationPermission = async (userId: string) => {
           createdAt: new Date(),
           device: navigator.userAgent
         });
+      } else {
+        console.warn('Không lấy được FCM Token. Kiểm tra lại VAPID Key hoặc quyền thông báo.');
       }
     }
   } catch (error) {
