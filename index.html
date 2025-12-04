@@ -4,15 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#D91E18" />
+    
+    <!-- iOS PWA meta tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Lịch Sự Kiện" />
     
     <title>Lịch Sự Kiện</title>
 
-    <!-- PWA Icons -->
-    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/3652/3652191.png" />
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3652/3652191.png" />
+    <!-- PWA Icons (Local) -->
+    <link rel="icon" href="/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/icon.png" />
     <link rel="manifest" href="/manifest.json" />
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -55,7 +57,7 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
-      /* Safe area utilities */
+      /* Safe area utilities for iPhone notch/home bar */
       .pb-safe {
         padding-bottom: env(safe-area-inset-bottom, 20px);
       }
