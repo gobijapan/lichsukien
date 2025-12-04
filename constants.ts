@@ -16,52 +16,52 @@ export const TIET_KHI = [
 export const BACKGROUNDS = [
   { 
     id: 'bg-1', 
-    name: 'Sen Hồng Tinh Khiết', 
-    url: 'https://images.unsplash.com/photo-1616489762694-8173595605d3?q=80&w=1080&auto=format&fit=crop' 
+    name: 'Đồng Cỏ', 
+    url: 'https://images.unsplash.com/photo-1764703495149-f09b0aa607c3?q=80&w=1887&auto=format&fit=crop' 
   },
   { 
     id: 'bg-2', 
-    name: 'Sắc Đào Ngày Tết', 
+    name: 'Hoa Đào', 
     url: 'https://images.unsplash.com/photo-1522383225653-ed111181a951?q=80&w=1080&auto=format&fit=crop' 
   },
   { 
     id: 'bg-3', 
-    name: 'Rừng Trúc Xanh', 
-    url: 'https://images.unsplash.com/photo-1597910037310-7aa8d4381335?q=80&w=1080&auto=format&fit=crop' 
+    name: 'Phật Giáo', 
+    url: 'https://images.unsplash.com/photo-1609745772921-f520289e9618?q=80&w=1827&auto=format&fit=crop' 
   },
   { 
     id: 'bg-4', 
-    name: 'Non Nước Ninh Bình', 
+    name: 'Vịnh Hạ Long', 
     url: 'https://images.unsplash.com/photo-1528127269322-539801943592?q=80&w=1080&auto=format&fit=crop' 
   },
   { 
     id: 'bg-5', 
-    name: 'Đèn Lồng Hội An', 
-    url: 'https://images.unsplash.com/photo-1535571257404-586616016c21?q=80&w=1080&auto=format&fit=crop' 
+    name: 'Trăng Lên', 
+    url: 'https://images.unsplash.com/photo-1762710940358-e3351cc9ff34?q=80&w=1887&auto=format&fit=crop' 
   },
   { 
     id: 'bg-6', 
-    name: 'Giấy Dó Cổ Điển', 
-    url: 'https://images.unsplash.com/photo-1586075010923-2dd45eeed8bd?q=80&w=1080&auto=format&fit=crop' 
+    name: 'Hoàng Hôn', 
+    url: 'https://images.unsplash.com/photo-1762374008545-5d9a847901ef?q=80&w=1887&auto=format&fit=crop' 
   },
   { 
     id: 'bg-7', 
-    name: 'Ruộng Bậc Thang', 
-    url: 'https://images.unsplash.com/photo-1533230626774-706788880d99?q=80&w=1080&auto=format&fit=crop' 
+    name: 'Rừng Tuyết', 
+    url: 'https://images.unsplash.com/photo-1738762390302-d877067f0c7d?q=80&w=1887&auto=format&fit=crop' 
   },
   { 
     id: 'bg-8', 
-    name: 'Mặt Hồ Tĩnh Lặng', 
-    url: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=1080&auto=format&fit=crop' 
+    name: 'Mặt Hồ', 
+    url: 'https://images.unsplash.com/photo-1764143458473-ffffec0bad84?q=80&w=1888&auto=format&fit=crop' 
   },
   { 
     id: 'bg-9', 
-    name: 'Mây Núi Sapa', 
+    name: 'Mây Trời', 
     url: 'https://images.unsplash.com/photo-1504608524841-42fe6f032b4b?q=80&w=1080&auto=format&fit=crop' 
   },
   { 
     id: 'bg-10', 
-    name: 'Trừu Tượng Vàng Son', 
+    name: 'Bong Bóng', 
     url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1080&auto=format&fit=crop' 
   },
 ];
