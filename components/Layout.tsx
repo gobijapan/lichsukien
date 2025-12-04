@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Calendar, CalendarDays, Bell, Settings } from 'lucide-react';
 import { TabType, AppSettings } from '../types';
@@ -22,13 +21,13 @@ const Layout: React.FC<LayoutProps> = ({ currentTab, onTabChange, children, sett
   }
 
   return (
-    <div className={`${settings.darkMode ? 'dark' : ''} w-full h-screen`}>
+    <div className={`${settings.darkMode ? 'dark' : ''} w-full min-h-[100dvh]`}>
       <div 
-        className={`w-full h-full max-w-md mx-auto relative overflow-hidden flex flex-col ${fontClass} transition-all duration-500`}
+        className={`w-full min-h-[100dvh] max-w-md mx-auto relative overflow-hidden flex flex-col ${fontClass} transition-all duration-500`}
       >
         {/* Dynamic Background */}
         <div 
-          className="absolute inset-0 z-0 bg-cover bg-center transition-all duration-700"
+          className="fixed inset-0 z-0 bg-cover bg-center transition-all duration-700 max-w-md mx-auto"
           style={{ backgroundImage: `url(${bgUrl})` }}
         >
           {/* Overlay determined by dark mode */}
@@ -36,41 +35,43 @@ const Layout: React.FC<LayoutProps> = ({ currentTab, onTabChange, children, sett
         </div>
 
         {/* Main Content Area */}
-        <main className="flex-1 h-full overflow-hidden relative z-10">
+        <main className="flex-1 overflow-y-auto relative z-10 pb-24">
           {children}
         </main>
 
-        {/* Glass Bottom Navigation */}
+        {/* Glass Bottom Navigation - FIXED POSITION */}
         {currentTab !== 'admin' && (
-          <nav className="absolute bottom-0 w-full glass-dark border-t border-white/10 flex justify-around items-center py-2 px-2 pb-safe z-50">
-            <NavButton 
-              active={currentTab === 'today'} 
-              onClick={() => onTabChange('today')} 
-              icon={<Calendar size={24} />} 
-              label="Hôm Nay" 
-              primaryColor={settings.primaryColor}
-            />
-            <NavButton 
-              active={currentTab === 'month'} 
-              onClick={() => onTabChange('month')} 
-              icon={<CalendarDays size={24} />} 
-              label="Tháng" 
-              primaryColor={settings.primaryColor}
-            />
-            <NavButton 
-              active={currentTab === 'events'} 
-              onClick={() => onTabChange('events')} 
-              icon={<Bell size={24} />} 
-              label="Sự Kiện" 
-              primaryColor={settings.primaryColor}
-            />
-            <NavButton 
-              active={currentTab === 'settings'} 
-              onClick={() => onTabChange('settings')} 
-              icon={<Settings size={24} />} 
-              label="Cài Đặt" 
-              primaryColor={settings.primaryColor}
-            />
+          <nav className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-md mx-auto">
+            <div className="glass-dark border-t border-white/10 backdrop-blur-xl flex justify-around items-center py-3 px-2 pb-safe">
+              <NavButton 
+                active={currentTab === 'today'} 
+                onClick={() => onTabChange('today')} 
+                icon={<Calendar size={24} />} 
+                label="Hôm Nay" 
+                primaryColor={settings.primaryColor}
+              />
+              <NavButton 
+                active={currentTab === 'month'} 
+                onClick={() => onTabChange('month')} 
+                icon={<CalendarDays size={24} />} 
+                label="Tháng" 
+                primaryColor={settings.primaryColor}
+              />
+              <NavButton 
+                active={currentTab === 'events'} 
+                onClick={() => onTabChange('events')} 
+                icon={<Bell size={24} />} 
+                label="Sự Kiện" 
+                primaryColor={settings.primaryColor}
+              />
+              <NavButton 
+                active={currentTab === 'settings'} 
+                onClick={() => onTabChange('settings')} 
+                icon={<Settings size={24} />} 
+                label="Cài Đặt" 
+                primaryColor={settings.primaryColor}
+              />
+            </div>
           </nav>
         )}
       </div>
@@ -83,8 +84,8 @@ const NavButton: React.FC<{active: boolean, onClick: () => void, icon: React.Rea
 }) => (
   <button 
     onClick={onClick}
-    className={`flex flex-col items-center justify-center w-16 h-14 rounded-2xl transition-all duration-300 
-      ${active ? 'text-white shadow-lg backdrop-blur-md transform -translate-y-2' : 'text-white/50 hover:text-white/80'}`}
+    className={`flex flex-col items-center justify-center w-16 h-12 rounded-2xl transition-all duration-300 
+      ${active ? 'text-white shadow-lg backdrop-blur-md transform -translate-y-1' : 'text-white/50 hover:text-white/80'}`}
     style={{ backgroundColor: active ? primaryColor : 'transparent' }}
   >
     {icon}
