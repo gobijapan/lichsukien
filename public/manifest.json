@@ -3,12 +3,12 @@
   "name": "Lịch Sự Kiện - Vạn Niên Lịch",
   "icons": [
     {
-      "src": "/icons/icon.png",
+      "src": "/icons/calendar.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "/icons/icon.png",
+      "src": "/icons/calendar.png",
       "type": "image/png",
       "sizes": "512x512"
     }
