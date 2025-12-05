@@ -9,7 +9,7 @@ import LoginView from './views/LoginView';
 import AdminView from './views/AdminView';
 import { TabType, AppSettings, User, SystemBanner } from './types';
 import { FONTS } from './constants';
-import { getSettings, saveSettings, getUserProfile, subscribeToBanners } from './services/storage';
+import { getSettings, saveSettings, getUserProfile, subscribeToBanners, saveUserProfile } from './services/storage';
 import { auth, messaging } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { requestNotificationPermission } from './services/notification';
@@ -70,6 +70,15 @@ const App: React.FC = () => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const userProfile = await getUserProfile(firebaseUser.uid);
+        
+        // Sync vital info to Firestore for Admin visibility
+        if (firebaseUser.email) {
+            saveUserProfile(firebaseUser.uid, { 
+                email: firebaseUser.email,
+                name: userProfile.name || firebaseUser.displayName || undefined 
+            });
+        }
+
         setUser({
           id: firebaseUser.uid,
           email: firebaseUser.email || '',
