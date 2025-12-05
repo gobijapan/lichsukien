@@ -53,7 +53,6 @@ export interface ReminderSettings {
   lunar15_1: boolean; // Rằm & Mùng 1
   solarHolidays: boolean;
   lunarHolidays: boolean;
-  // Replaced single alertTime with multiple configs
   defaultReminders: GlobalReminderConfig[]; 
 }
 
@@ -72,26 +71,30 @@ export interface User {
   email: string;
   role: 'user' | 'admin';
   name: string;
-  // Extended Profile
   dateOfBirth?: string;
   phoneNumber?: string;
   address?: string;
-  createdAt?: string; // Added for Admin view
+  createdAt?: string;
 }
 
-export interface SystemAlert {
-  active: boolean;
+// NEW: Banner List Item
+export interface SystemBanner {
+  id: string;
   content: string;
   type: 'info' | 'warning' | 'error';
-  updatedAt?: string;
+  active: boolean;
+  createdAt: string;
 }
 
-export interface SystemNotification {
-  id?: string;
+// NEW: Periodic Push Configuration
+export interface AdminPushConfig {
+  id: string;
   title: string;
   body: string;
-  scheduledAt: string;
-  status: 'pending' | 'sent' | 'failed';
+  time: string; // HH:mm (00, 15, 30, 45)
+  frequency: 'once' | 'daily';
+  isActive: boolean;
+  lastSent?: string;
   createdAt: string;
 }
 
