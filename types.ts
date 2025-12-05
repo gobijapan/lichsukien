@@ -8,20 +8,18 @@ export interface CalendarEvent {
   month: number;
   isRecurring: boolean;
   category: 'anniversary' | 'birthday' | 'holiday' | 'other';
-  // Advanced Fields
   details?: string;
   location?: string;
-  originalYear?: number; // For anniversary calculation
+  originalYear?: number; 
   reminderConfig?: {
     at7am: boolean;
     customReminders?: {
       id: string;
       daysBefore: number;
-      time: string; // HH:mm
-      note?: string; // Limit 300 chars
+      time: string; 
+      note?: string; 
     }[];
   };
-  // UI Helpers (Computed)
   isSystem?: boolean; 
   displayDate?: string; 
 }
@@ -45,12 +43,12 @@ export interface LunarDate {
 
 export interface GlobalReminderConfig {
   daysBefore: number;
-  time: string; // HH:mm
+  time: string;
 }
 
 export interface ReminderSettings {
   enabled: boolean;
-  lunar15_1: boolean; // Rằm & Mùng 1
+  lunar15_1: boolean;
   solarHolidays: boolean;
   lunarHolidays: boolean;
   defaultReminders: GlobalReminderConfig[]; 
@@ -58,10 +56,10 @@ export interface ReminderSettings {
 
 export interface AppSettings {
   bgId: string;
-  customBg?: string; // Base64 string for user uploaded image
-  font: string; // key from FONTS
+  customBg?: string; 
+  font: string; 
   darkMode: boolean;
-  primaryColor: string; // Hex code
+  primaryColor: string; 
   weekStart: 'monday' | 'sunday';
   reminderSettings: ReminderSettings;
 }
@@ -77,23 +75,23 @@ export interface User {
   createdAt?: string;
 }
 
-// NEW: Banner List Item
+// NEW: System Banner (Loa Phường) as List Item
 export interface SystemBanner {
   id: string;
   content: string;
   type: 'info' | 'warning' | 'error';
-  active: boolean;
+  isActive: boolean;
   createdAt: string;
 }
 
-// NEW: Periodic Push Configuration
+// NEW: Admin Push Configuration
 export interface AdminPushConfig {
   id: string;
   title: string;
   body: string;
-  time: string; // HH:mm (00, 15, 30, 45)
+  time: string; // HH:mm (15 min interval)
   frequency: 'once' | 'daily';
-  isActive: boolean;
+  isActive: boolean; // Checkbox to enable/disable
   lastSent?: string;
   createdAt: string;
 }
