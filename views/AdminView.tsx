@@ -183,12 +183,12 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onClose, fontClass }) => {
         )}
 
         {activeTab === 'system' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="flex flex-col gap-6">
                 
                 {/* === LOA PHƯỜNG (BANNERS) === */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                     <div className="p-4 border-b border-slate-100 bg-orange-50 flex justify-between items-center">
-                        <h3 className="font-bold text-orange-800 flex gap-2 items-center"><Megaphone size={18} /> Loa Phường</h3>
+                        <h3 className="font-bold text-orange-800 flex gap-2 items-center"><Megaphone size={18} /> Loa Phường (Banner chạy chữ)</h3>
                         <span className="text-xs font-bold bg-white text-orange-600 px-2 py-1 rounded shadow-sm">{banners.length} tin</span>
                     </div>
                     
@@ -204,7 +204,7 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onClose, fontClass }) => {
                     </div>
 
                     {/* List */}
-                    <div className="flex-1 overflow-y-auto max-h-[400px]">
+                    <div className="flex-1 overflow-y-auto">
                         {banners.length === 0 ? (
                             <div className="p-8 text-center text-slate-400 text-sm">Chưa có thông báo nào.</div>
                         ) : (
@@ -234,7 +234,7 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onClose, fontClass }) => {
                 {/* === PUSH NOTIFICATION CONFIG === */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                     <div className="p-4 border-b border-slate-100 bg-blue-50 flex justify-between items-center">
-                        <h3 className="font-bold text-blue-800 flex gap-2 items-center"><Send size={18} /> Gửi Tin (Push)</h3>
+                        <h3 className="font-bold text-blue-800 flex gap-2 items-center"><Send size={18} /> Gửi Tin (Push) Định Kỳ</h3>
                         <span className="text-xs font-bold bg-white text-blue-600 px-2 py-1 rounded shadow-sm">{pushConfigs.length} cấu hình</span>
                     </div>
 
@@ -244,17 +244,19 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onClose, fontClass }) => {
                         <textarea placeholder="Nội dung tin nhắn..." value={pushForm.body} onChange={e => setPushForm({...pushForm, body: e.target.value})} className="w-full border border-slate-300 rounded-lg p-2 text-sm h-16 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" />
                         
                         <div className="flex items-center justify-between gap-2">
-                            <TimeSelect value={pushForm.time} onChange={v => setPushForm({...pushForm, time: v})} />
-                            <select value={pushForm.frequency} onChange={e => setPushForm({...pushForm, frequency: e.target.value as any})} className="border border-slate-300 rounded-lg p-1.5 text-sm bg-white">
-                                <option value="once">Một lần</option>
-                                <option value="daily">Hàng ngày</option>
-                            </select>
+                            <div className="flex gap-4 items-center">
+                                <TimeSelect value={pushForm.time} onChange={v => setPushForm({...pushForm, time: v})} />
+                                <select value={pushForm.frequency} onChange={e => setPushForm({...pushForm, frequency: e.target.value as any})} className="border border-slate-300 rounded-lg p-1.5 text-sm bg-white">
+                                    <option value="once">Một lần</option>
+                                    <option value="daily">Hàng ngày</option>
+                                </select>
+                            </div>
                             <button onClick={handleAddPush} className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow hover:bg-blue-700">Lưu</button>
                         </div>
                     </div>
 
                     {/* List */}
-                    <div className="flex-1 overflow-y-auto max-h-[400px]">
+                    <div className="flex-1 overflow-y-auto">
                         {pushConfigs.length === 0 ? (
                             <div className="p-8 text-center text-slate-400 text-sm">Chưa có lịch gửi tin nào.</div>
                         ) : (
