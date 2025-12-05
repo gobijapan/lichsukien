@@ -7,9 +7,9 @@ import EventsView from './views/EventsView';
 import SettingsView from './views/SettingsView';
 import LoginView from './views/LoginView';
 import AdminView from './views/AdminView';
-import { TabType, AppSettings, User, SystemAlert } from './types';
+import { TabType, AppSettings, User, SystemBanner } from './types';
 import { FONTS } from './constants';
-import { getSettings, saveSettings, getUserProfile, getSystemAlert } from './services/storage';
+import { getSettings, saveSettings, getUserProfile, subscribeToBanners } from './services/storage';
 import { auth, messaging } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { requestNotificationPermission } from './services/notification';
@@ -37,8 +37,8 @@ const App: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [dataVersion, setDataVersion] = useState(0); 
   
-  // System Alert State
-  const [systemAlert, setSystemAlert] = useState<SystemAlert | null>(null);
+  // Real-time Banners
+  const [banners, setBanners] = useState<SystemBanner[]>([]);
   
   // Toast State
   const [toast, setToast] = useState<{title: string, body: string} | null>(null);
@@ -62,10 +62,12 @@ const App: React.FC = () => {
     const saved = getSettings();
     setSettings(saved);
 
-    // Fetch System Alert
-    getSystemAlert().then(setSystemAlert);
+    // Subscribe to Banners
+    const unsubscribeBanners = subscribeToBanners((data) => {
+        setBanners(data);
+    });
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const userProfile = await getUserProfile(firebaseUser.uid);
         setUser({
@@ -83,7 +85,6 @@ const App: React.FC = () => {
       }
     });
 
-    // Foreground Message Listener
     if (messaging) {
         onMessage(messaging, (payload) => {
             console.log('Message received. ', payload);
@@ -91,17 +92,15 @@ const App: React.FC = () => {
                 title: payload.notification?.title || 'Thông báo mới',
                 body: payload.notification?.body || ''
             });
-            // Play sound
-            try {
-                new Audio('/notification.mp3').play().catch(() => {});
-            } catch(e) {}
-            
-            // Auto hide
+            try { new Audio('/notification.mp3').play().catch(() => {}); } catch(e) {}
             setTimeout(() => setToast(null), 5000);
         });
     }
 
-    return () => unsubscribe();
+    return () => {
+        unsubscribeBanners();
+        unsubscribeAuth();
+    };
   }, []);
 
   const handleUpdateSettings = (newSettings: AppSettings) => {
@@ -194,7 +193,7 @@ const App: React.FC = () => {
           }} 
           settings={settings}
           fontClass={fontClass}
-          systemAlert={systemAlert}
+          banners={banners}
         >
            {renderContent()}
         </Layout>

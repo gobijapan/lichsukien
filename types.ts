@@ -79,19 +79,24 @@ export interface User {
   createdAt?: string; // Added for Admin view
 }
 
-export interface SystemAlert {
-  active: boolean;
+// Updated System Banner for Carousel
+export interface SystemBanner {
+  id: string;
   content: string;
   type: 'info' | 'warning' | 'error';
-  updatedAt?: string;
+  active: boolean;
+  createdAt: string;
 }
 
-export interface SystemNotification {
-  id?: string;
+// Updated Push Config for Periodic Schedule
+export interface AdminPushConfig {
+  id: string;
   title: string;
   body: string;
-  scheduledAt: string;
-  status: 'pending' | 'sent' | 'failed';
+  time: string; // HH:mm (00, 15, 30, 45)
+  frequency: 'once' | 'daily';
+  isActive: boolean;
+  lastSent?: string;
   createdAt: string;
 }
 
