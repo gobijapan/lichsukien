@@ -7,20 +7,42 @@ import EventsView from './views/EventsView';
 import SettingsView from './views/SettingsView';
 import LoginView from './views/LoginView';
 import AdminView from './views/AdminView';
-import { TabType, AppSettings, User } from './types';
+import { TabType, AppSettings, User, SystemAlert } from './types';
 import { FONTS } from './constants';
-import { getSettings, saveSettings, getUserProfile } from './services/storage';
-import { auth } from './services/firebase';
+import { getSettings, saveSettings, getUserProfile, getSystemAlert } from './services/storage';
+import { auth, messaging } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { requestNotificationPermission } from './services/notification';
+import { onMessage } from 'firebase/messaging';
+import { Bell, X } from 'lucide-react';
+
+const Toast = ({ title, body, onClose }: { title: string, body: string, onClose: () => void }) => (
+    <div className="fixed top-4 left-4 right-4 bg-white/90 backdrop-blur-md shadow-2xl rounded-2xl p-4 z-[100] border-l-4 border-red-500 animate-in slide-in-from-top-2 duration-300 flex gap-3">
+        <div className="bg-red-100 p-2 rounded-full h-10 w-10 flex items-center justify-center text-red-600 shrink-0">
+            <Bell size={20} />
+        </div>
+        <div className="flex-1 min-w-0">
+            <h4 className="font-bold text-gray-900 text-sm">{title}</h4>
+            <p className="text-gray-600 text-xs mt-1 line-clamp-2">{body}</p>
+        </div>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 self-start">
+            <X size={18} />
+        </button>
+    </div>
+);
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [tab, setTab] = useState<TabType>('today');
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [dataVersion, setDataVersion] = useState(0); // Used to force re-render views after restore
+  const [dataVersion, setDataVersion] = useState(0); 
   
-  // Initialize with defaults to avoid undefined errors before load
+  // System Alert State
+  const [systemAlert, setSystemAlert] = useState<SystemAlert | null>(null);
+  
+  // Toast State
+  const [toast, setToast] = useState<{title: string, body: string} | null>(null);
+
   const [settings, setSettings] = useState<AppSettings>({ 
     bgId: 'bg-1', 
     font: 'inter', 
@@ -40,27 +62,44 @@ const App: React.FC = () => {
     const saved = getSettings();
     setSettings(saved);
 
-    // Listen to Firebase Auth State
+    // Fetch System Alert
+    getSystemAlert().then(setSystemAlert);
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Fetch extended profile info from Firestore
         const userProfile = await getUserProfile(firebaseUser.uid);
-
         setUser({
           id: firebaseUser.uid,
           email: firebaseUser.email || '',
           name: userProfile.name || firebaseUser.displayName || 'Người dùng',
-          role: userProfile.role || 'user', // Use role from Firestore
+          role: userProfile.role || 'user',
           dateOfBirth: userProfile.dateOfBirth,
           phoneNumber: userProfile.phoneNumber,
           address: userProfile.address
         });
-        // Request Notification Permission when logged in
         requestNotificationPermission(firebaseUser.uid);
       } else {
         setUser(null);
       }
     });
+
+    // Foreground Message Listener
+    if (messaging) {
+        onMessage(messaging, (payload) => {
+            console.log('Message received. ', payload);
+            setToast({
+                title: payload.notification?.title || 'Thông báo mới',
+                body: payload.notification?.body || ''
+            });
+            // Play sound
+            try {
+                new Audio('/notification.mp3').play().catch(() => {});
+            } catch(e) {}
+            
+            // Auto hide
+            setTimeout(() => setToast(null), 5000);
+        });
+    }
 
     return () => unsubscribe();
   }, []);
@@ -71,7 +110,6 @@ const App: React.FC = () => {
   };
 
   const handleLogin = (u: User) => {
-    // This is mainly handled by onAuthStateChanged now, but kept for compatibility
     setTab('today');
   };
 
@@ -87,24 +125,19 @@ const App: React.FC = () => {
       }
   }
 
-  // Called when data is restored from backup
   const handleDataRestore = () => {
     const saved = getSettings();
     setSettings(saved);
-    // Increment version to force re-mount of views so they fetch new data from localStorage
     setDataVersion(prev => prev + 1);
   };
 
   const fontClass = FONTS[settings.font]?.class || 'font-sans';
 
-  // Render Logic
   const renderContent = () => {
     if (tab === 'admin') {
        if (user?.role === 'admin') {
-           // Pass onClose to return to settings instead of logging out
            return <AdminView user={user} onClose={() => setTab('settings')} fontClass={fontClass} />;
        }
-       // Pass onClose to return to settings if user cancels login
        return <LoginView onLogin={handleLogin} onClose={() => setTab('settings')} fontClass={fontClass} />;
     }
 
@@ -148,23 +181,24 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout 
-      currentTab={tab} 
-      onTabChange={(t) => {
-        // Feature: Tap 'Today' again to reset to actual today
-        if (t === 'today' && tab === 'today') {
-           setCurrentDate(new Date());
-        }
-        if (t === 'admin' && user?.role !== 'admin') {
-             // allow login view
-        }
-        setTab(t);
-      }} 
-      settings={settings}
-      fontClass={fontClass}
-    >
-       {renderContent()}
-    </Layout>
+    <>
+        {toast && <Toast title={toast.title} body={toast.body} onClose={() => setToast(null)} />}
+        
+        <Layout 
+          currentTab={tab} 
+          onTabChange={(t) => {
+            if (t === 'today' && tab === 'today') {
+               setCurrentDate(new Date());
+            }
+            setTab(t);
+          }} 
+          settings={settings}
+          fontClass={fontClass}
+          systemAlert={systemAlert}
+        >
+           {renderContent()}
+        </Layout>
+    </>
   );
 };
 
