@@ -1,11 +1,10 @@
 // @ts-ignore
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore/lite';
+import { getFirestore } from 'firebase/firestore'; // Changed from /lite to full
 import { getMessaging } from 'firebase/messaging';
 
 // --- CẤU HÌNH FIREBASE ---
-// Kiểm tra biến môi trường trước khi sử dụng để tránh sập app
 const env = (import.meta as any).env || {};
 
 const firebaseConfig = {
@@ -23,13 +22,11 @@ let db: any;
 let messaging: any = null;
 
 try {
-    // Chỉ khởi tạo khi có config hợp lệ
     if (firebaseConfig.apiKey) {
         app = initializeApp(firebaseConfig);
         auth = getAuth(app);
         db = getFirestore(app);
         
-        // Messaging support
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
             try {
                 messaging = getMessaging(app);
@@ -38,8 +35,7 @@ try {
             }
         }
     } else {
-        console.warn('Thiếu cấu hình Firebase trong .env. Ứng dụng sẽ chạy ở chế độ offline giới hạn.');
-        // Mock objects để không crash UI
+        console.warn('Thiếu cấu hình Firebase trong .env.');
         auth = { currentUser: null, signOut: async () => {} };
         db = {};
     }
