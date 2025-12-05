@@ -76,6 +76,23 @@ export interface User {
   dateOfBirth?: string;
   phoneNumber?: string;
   address?: string;
+  createdAt?: string; // Added for Admin view
+}
+
+export interface SystemAlert {
+  active: boolean;
+  content: string;
+  type: 'info' | 'warning' | 'error';
+  updatedAt?: string;
+}
+
+export interface SystemNotification {
+  id?: string;
+  title: string;
+  body: string;
+  scheduledAt: string;
+  status: 'pending' | 'sent' | 'failed';
+  createdAt: string;
 }
 
 export type TabType = 'today' | 'month' | 'events' | 'settings' | 'admin';
