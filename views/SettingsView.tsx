@@ -6,7 +6,8 @@ import { BACKGROUNDS, FONTS } from '../constants';
 import { backupData, restoreData, saveUserProfile, getBackupInfo } from '../services/storage';
 import { auth } from '../services/firebase';
 import { format } from 'date-fns';
-import vi from 'date-fns/locale/vi';
+import { vi } from 'date-fns/locale';
+import { requestNotificationPermission } from '../services/notification';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -59,6 +60,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, updateSettings, f
   const [backupStep, setBackupStep] = useState<'idle' | 'confirm' | 'processing' | 'success' | 'error'>('idle');
   const [restoreStep, setRestoreStep] = useState<'idle' | 'check' | 'confirm' | 'processing' | 'success' | 'error' | 'notfound'>('idle');
   const [backupInfo, setBackupInfo] = useState<Date | null>(null);
+  const [notifLoading, setNotifLoading] = useState(false);
 
   // --- BACKUP LOGIC ---
   const startBackup = () => {
@@ -183,6 +185,27 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, updateSettings, f
           if (onRefreshProfile) onRefreshProfile();
       } else {
           alert('Lỗi khi cập nhật hồ sơ.');
+      }
+  }
+  
+  const activateNotifications = async () => {
+      if (!user) {
+          alert("Vui lòng đăng nhập để kích hoạt thông báo.");
+          onLoginClick();
+          return;
+      }
+      setNotifLoading(true);
+      const result = await requestNotificationPermission(user.id);
+      setNotifLoading(false);
+      
+      if (result.success) {
+          alert("✅ Đã đăng ký nhận thông báo thành công!");
+          // Auto enable switch
+          if (!settings.reminderSettings.enabled) {
+              updateReminderSetting('enabled', true);
+          }
+      } else {
+          alert(`❌ Lỗi kích hoạt: ${result.error}`);
       }
   }
 
@@ -386,6 +409,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, updateSettings, f
 
             {settings.reminderSettings.enabled && (
                 <div className="p-4 space-y-4 animate-in slide-in-from-top-2">
+                    
+                    {/* Manual Activation Button */}
+                    <button 
+                        onClick={activateNotifications}
+                        disabled={notifLoading}
+                        className="w-full p-3 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-100 font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-600/30 active:scale-95 transition-all"
+                    >
+                        {notifLoading ? <Loader2 size={16} className="animate-spin" /> : <Bell size={16} />}
+                        {notifLoading ? "Đang xử lý..." : "Kích hoạt thông báo trên thiết bị này"}
+                    </button>
+
                     <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
                         <span className="text-sm font-medium">Rằm & Mùng 1 Âm lịch</span>
                         <input type="checkbox" 
