@@ -2,33 +2,46 @@
 // @ts-ignore
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore/lite';
+import { getFirestore } from 'firebase/firestore'; // Switched to full SDK
 import { getMessaging } from 'firebase/messaging';
 
 // --- CẤU HÌNH FIREBASE ---
-// 1. Dùng biến môi trường để bảo mật (import.meta.env cho Vite)
-// 2. Tạo file .env ở thư mục gốc và dán key vào đó
+const env = (import.meta as any).env || {};
+
 const firebaseConfig = {
-  apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY,
-  authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: (import.meta as any).env.VITE_FIREBASE_APP_ID
+  apiKey: env.VITE_FIREBASE_API_KEY,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: env.VITE_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-
-// Messaging support (only in supported browsers)
+let app: any;
+let auth: any;
+let db: any;
 let messaging: any = null;
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-    try {
-        messaging = getMessaging(app);
-    } catch (e) {
-        console.warn('Firebase Messaging not supported in this environment');
+
+try {
+    if (firebaseConfig.apiKey) {
+        app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+            try {
+                messaging = getMessaging(app);
+            } catch (e) {
+                console.warn('Firebase Messaging not supported');
+            }
+        }
+    } else {
+        console.warn('Thiếu cấu hình Firebase trong .env.');
+        auth = { currentUser: null, signOut: async () => {} };
+        db = {};
     }
+} catch (e) {
+    console.error('Firebase Init Error:', e);
 }
-export { messaging };
+
+export { auth, db, messaging };
