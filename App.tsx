@@ -7,9 +7,9 @@ import EventsView from './views/EventsView';
 import SettingsView from './views/SettingsView';
 import LoginView from './views/LoginView';
 import AdminView from './views/AdminView';
-import { TabType, AppSettings, User, SystemBanner } from './types';
+import { TabType, AppSettings, User, SystemAlert } from './types';
 import { FONTS } from './constants';
-import { getSettings, saveSettings, getUserProfile, subscribeToBanners } from './services/storage';
+import { getSettings, saveSettings, getUserProfile, getSystemAlert } from './services/storage';
 import { auth, messaging } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { requestNotificationPermission } from './services/notification';
@@ -37,8 +37,10 @@ const App: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [dataVersion, setDataVersion] = useState(0); 
   
-  // System Banners
-  const [systemBanners, setSystemBanners] = useState<SystemBanner[]>([]);
+  // System Alert State
+  const [systemAlert, setSystemAlert] = useState<SystemAlert | null>(null);
+  
+  // Toast State
   const [toast, setToast] = useState<{title: string, body: string} | null>(null);
 
   const [settings, setSettings] = useState<AppSettings>({ 
@@ -60,10 +62,8 @@ const App: React.FC = () => {
     const saved = getSettings();
     setSettings(saved);
 
-    // Subscribe to Banner List
-    const unsubBanners = subscribeToBanners((banners) => {
-        setSystemBanners(banners);
-    });
+    // Fetch System Alert
+    getSystemAlert().then(setSystemAlert);
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -83,21 +83,25 @@ const App: React.FC = () => {
       }
     });
 
+    // Foreground Message Listener
     if (messaging) {
         onMessage(messaging, (payload) => {
+            console.log('Message received. ', payload);
             setToast({
                 title: payload.notification?.title || 'Thông báo mới',
                 body: payload.notification?.body || ''
             });
-            try { new Audio('/notification.mp3').play().catch(() => {}); } catch(e) {}
+            // Play sound
+            try {
+                new Audio('/notification.mp3').play().catch(() => {});
+            } catch(e) {}
+            
+            // Auto hide
             setTimeout(() => setToast(null), 5000);
         });
     }
 
-    return () => {
-        unsubscribe();
-        unsubBanners();
-    }
+    return () => unsubscribe();
   }, []);
 
   const handleUpdateSettings = (newSettings: AppSettings) => {
@@ -147,7 +151,10 @@ const App: React.FC = () => {
           <MonthView 
             key={dataVersion}
             currentDate={currentDate} 
-            onDateSelect={(d) => { setCurrentDate(d); setTab('today'); }} 
+            onDateSelect={(d) => { 
+                setCurrentDate(d); 
+                setTab('today'); 
+            }} 
             themeStyles={{bg: 'bg-transparent', card: 'glass', text: 'text-white', primaryText: 'text-yellow-300', border: 'border-white/20', primary: 'bg-red-600'}} 
             primaryColor={settings.primaryColor}
           />
@@ -180,12 +187,14 @@ const App: React.FC = () => {
         <Layout 
           currentTab={tab} 
           onTabChange={(t) => {
-            if (t === 'today' && tab === 'today') setCurrentDate(new Date());
+            if (t === 'today' && tab === 'today') {
+               setCurrentDate(new Date());
+            }
             setTab(t);
           }} 
           settings={settings}
           fontClass={fontClass}
-          systemBanners={systemBanners}
+          systemAlert={systemAlert}
         >
            {renderContent()}
         </Layout>
