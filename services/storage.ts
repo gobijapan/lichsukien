@@ -1,17 +1,16 @@
 
-import { CalendarEvent, AppSettings, LunarDate, User, SystemBanner, AdminPushConfig } from '../types';
+import { CalendarEvent, AppSettings, LunarDate, User, SystemAlert, SystemNotification } from '../types';
 import { HOLIDAYS_LUNAR, HOLIDAYS_SOLAR } from '../constants';
 import { getLunarDate, getSolarDateFromLunar, convertSolar2LunarAlgorithm } from '../utils/lunar';
 import { addDays } from 'date-fns';
-import { doc, setDoc, getDoc, collection, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, getDocs, addDoc, updateDoc } from 'firebase/firestore/lite';
 import { db, auth } from './firebase';
 
 const STORAGE_KEY_EVENTS = 'vnl_events';
 const STORAGE_KEY_SETTINGS = 'vnl_settings';
 
-// --- EVENT FUNCTIONS ---
-
 export const saveEvent = async (event: CalendarEvent): Promise<void> => {
+  // Local Save
   const current = getEvents();
   const index = current.findIndex(e => e.id === event.id);
   let updated;
@@ -23,6 +22,7 @@ export const saveEvent = async (event: CalendarEvent): Promise<void> => {
   }
   localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(updated));
 
+  // Hybrid Sync: Sync to Firestore immediately if logged in
   if (auth.currentUser) {
       try {
           await setDoc(doc(db, 'users', auth.currentUser.uid), { events: updated }, { merge: true });
@@ -30,14 +30,17 @@ export const saveEvent = async (event: CalendarEvent): Promise<void> => {
           console.error("Auto-sync error:", e);
       }
   }
+
   return new Promise((resolve) => setTimeout(resolve, 100));
 };
 
 export const deleteEvent = async (id: string): Promise<void> => {
+  // Local Save
   const current = getEvents();
   const updated = current.filter(e => e.id !== id);
   localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(updated));
 
+  // Hybrid Sync
   if (auth.currentUser) {
       try {
           await setDoc(doc(db, 'users', auth.currentUser.uid), { events: updated }, { merge: true });
@@ -45,6 +48,7 @@ export const deleteEvent = async (id: string): Promise<void> => {
           console.error("Auto-sync error:", e);
       }
   }
+
   return new Promise((resolve) => setTimeout(resolve, 100));
 };
 
@@ -57,13 +61,18 @@ export const getEvents = (): CalendarEvent[] => {
   }
 };
 
+/**
+ * Get all events (user + system) for a specific Date
+ */
 export const getEventsForDate = (date: Date): CalendarEvent[] => {
   const lunar = getLunarDate(date);
   const d = date.getDate();
   const m = date.getMonth() + 1;
   const userEvents = getEvents();
+
   const events: CalendarEvent[] = [];
 
+  // Check Solar Holidays
   HOLIDAYS_SOLAR.forEach(h => {
     if (h.day === d && h.month === m) {
       events.push({
@@ -80,6 +89,7 @@ export const getEventsForDate = (date: Date): CalendarEvent[] => {
     }
   });
 
+  // Check Lunar Holidays
   HOLIDAYS_LUNAR.forEach(h => {
     if (h.day === lunar.day && h.month === lunar.month) {
       events.push({
@@ -96,6 +106,7 @@ export const getEventsForDate = (date: Date): CalendarEvent[] => {
     }
   });
 
+  // Check User Events
   userEvents.forEach(e => {
     if (e.type === 'solar') {
       if (e.day === d && e.month === m) events.push(e);
@@ -107,8 +118,10 @@ export const getEventsForDate = (date: Date): CalendarEvent[] => {
   return events;
 };
 
-// --- REMINDER LOGIC ---
-
+/**
+ * Checks for any active reminders for TODAY.
+ * Used for the Bell Icon in Month View and Today View badges.
+ */
 export const getRemindersForDate = (date: Date): { title: string, note?: string, type: 'system' | 'event', eventId?: string }[] => {
     const settings = getSettings();
     if (!settings.reminderSettings.enabled) return [];
@@ -117,53 +130,116 @@ export const getRemindersForDate = (date: Date): { title: string, note?: string,
     const reminders: { title: string, note?: string, type: 'system' | 'event', eventId?: string }[] = [];
     const globalConfigs = settings.reminderSettings.defaultReminders || [];
 
+    // --- SYSTEM EVENTS & GLOBAL REMINDERS ---
     globalConfigs.forEach(config => {
         const targetDate = addDays(date, config.daysBefore);
         const tLunar = getLunarDate(targetDate);
         const tDay = targetDate.getDate();
         const tMonth = targetDate.getMonth() + 1;
 
+        // 1. Check Rằm & Mùng 1
         if (settings.reminderSettings.lunar15_1) {
-            if (tLunar.day === 1) reminders.push({ title: config.daysBefore === 0 ? 'Hôm nay là Mùng 1 Âm lịch' : `Sắp tới: Mùng 1 Âm lịch`, note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`, type: 'system' });
-            if (tLunar.day === 15) reminders.push({ title: config.daysBefore === 0 ? 'Hôm nay là Rằm (15 Âm lịch)' : `Sắp tới: Rằm (15 Âm lịch)`, note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`, type: 'system' });
+            if (tLunar.day === 1) {
+                 reminders.push({ 
+                     title: config.daysBefore === 0 ? 'Hôm nay là Mùng 1 Âm lịch' : `Sắp tới: Mùng 1 Âm lịch`,
+                     note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`,
+                     type: 'system' 
+                 });
+            }
+            if (tLunar.day === 15) {
+                 reminders.push({ 
+                     title: config.daysBefore === 0 ? 'Hôm nay là Rằm (15 Âm lịch)' : `Sắp tới: Rằm (15 Âm lịch)`,
+                     note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`,
+                     type: 'system' 
+                 });
+            }
         }
+
+        // 2. Check Solar Holidays
         if (settings.reminderSettings.solarHolidays) {
             HOLIDAYS_SOLAR.forEach(h => {
-                if(h.day === tDay && h.month === tMonth) reminders.push({ title: config.daysBefore === 0 ? `Hôm nay lễ: ${h.title}` : `Sắp lễ: ${h.title}`, note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`, type: 'system' });
+                if(h.day === tDay && h.month === tMonth) {
+                    reminders.push({ 
+                        title: config.daysBefore === 0 ? `Hôm nay lễ: ${h.title}` : `Sắp lễ: ${h.title}`,
+                        note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`,
+                        type: 'system' 
+                    });
+                }
             });
         }
+
+        // 3. Check Lunar Holidays
         if (settings.reminderSettings.lunarHolidays) {
             HOLIDAYS_LUNAR.forEach(h => {
-                if(h.day === tLunar.day && h.month === tLunar.month) reminders.push({ title: config.daysBefore === 0 ? `Hôm nay lễ: ${h.title}` : `Sắp lễ: ${h.title}`, note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`, type: 'system' });
+                if(h.day === tLunar.day && h.month === tLunar.month) {
+                    reminders.push({ 
+                        title: config.daysBefore === 0 ? `Hôm nay lễ: ${h.title}` : `Sắp lễ: ${h.title}`,
+                        note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`,
+                        type: 'system' 
+                    });
+                }
             });
         }
     });
 
+    // --- USER EVENT CUSTOM REMINDERS ---
     for(let offset = 0; offset <= 30; offset++) {
         const targetDate = addDays(date, offset);
         const tLunar = getLunarDate(targetDate);
 
         userEvents.forEach(evt => {
             if(!evt.reminderConfig) return;
+
             let isEventDay = false;
-            if (evt.type === 'solar') { if (evt.day === targetDate.getDate() && evt.month === targetDate.getMonth() + 1) isEventDay = true; }
-            else { if (evt.day === tLunar.day && evt.month === tLunar.month) isEventDay = true; }
+            if (evt.type === 'solar') {
+                if (evt.day === targetDate.getDate() && evt.month === targetDate.getMonth() + 1) isEventDay = true;
+            } else {
+                if (evt.day === tLunar.day && evt.month === tLunar.month) isEventDay = true;
+            }
 
             if (isEventDay) {
                 const remindersForOffset = evt.reminderConfig.customReminders?.filter(r => r.daysBefore === offset);
-                if (offset === 0 && evt.reminderConfig.at7am) reminders.push({ title: `Hôm nay: ${evt.title}`, note: 'Sự kiện diễn ra hôm nay', type: 'event', eventId: evt.id });
+                
+                if (offset === 0 && evt.reminderConfig.at7am) {
+                    reminders.push({
+                        title: `Hôm nay: ${evt.title}`,
+                        note: 'Sự kiện diễn ra hôm nay',
+                        type: 'event',
+                        eventId: evt.id
+                    });
+                }
+
                 if (remindersForOffset && remindersForOffset.length > 0) {
                     remindersForOffset.forEach(r => {
-                        reminders.push({ title: `Sắp tới: ${evt.title}`, note: r.note ? `${r.note} (Còn ${offset} ngày)` : `Sự kiện diễn ra sau ${offset} ngày`, type: 'event', eventId: evt.id });
+                        reminders.push({
+                            title: `Sắp tới: ${evt.title}`,
+                            note: r.note ? `${r.note} (Còn ${offset} ngày)` : `Sự kiện diễn ra sau ${offset} ngày`,
+                            type: 'event',
+                            eventId: evt.id
+                        });
                     });
                 }
             }
         });
     }
-    return reminders.filter((v, i, a) => a.findIndex(t => (t.title === v.title && t.note === v.note)) === i);
+
+    const uniqueReminders = reminders.filter((v, i, a) => a.findIndex(t => (t.title === v.title && t.note === v.note)) === i);
+
+    return uniqueReminders;
 }
 
-export const getAllUpcomingReminders = (): any[] => {
+/**
+ * Projects ALL upcoming reminders for the next 60 days.
+ * Used for the Reminder Manager List.
+ */
+export const getAllUpcomingReminders = (): { 
+    triggerDate: Date; 
+    timeStr: string; 
+    eventTitle: string; 
+    eventDateDisplay: string;
+    note: string; 
+    type: 'system' | 'event' 
+}[] => {
     const settings = getSettings();
     if (!settings.reminderSettings.enabled) return [];
     
@@ -173,11 +249,15 @@ export const getAllUpcomingReminders = (): any[] => {
     const remindersList: any[] = [];
     const globalConfigs = settings.reminderSettings.defaultReminders || [];
 
+    // Iterate through next 60 days to find Event Occurrences
     for (let i = 0; i < lookAheadDays; i++) {
         const currentDate = addDays(today, i);
         const tDay = currentDate.getDate();
         const tMonth = currentDate.getMonth() + 1;
         const tLunar = getLunarDate(currentDate);
+
+        // --- 1. System Events (Holiday/Lunar) Occurrence ---
+        // Identify if 'currentDate' is a special day
         const systemEventsOnDate: {title: string, dateDisplay: string}[] = [];
 
         if (settings.reminderSettings.lunar15_1) {
@@ -185,52 +265,100 @@ export const getAllUpcomingReminders = (): any[] => {
             if (tLunar.day === 15) systemEventsOnDate.push({title: 'Rằm (15 Âm lịch)', dateDisplay: `${tDay}/${tMonth} (15/${tLunar.month} AL)`});
         }
         if (settings.reminderSettings.solarHolidays) {
-            HOLIDAYS_SOLAR.forEach(h => { if(h.day === tDay && h.month === tMonth) systemEventsOnDate.push({title: h.title, dateDisplay: `${h.day}/${h.month} (DL)`}); });
+            HOLIDAYS_SOLAR.forEach(h => {
+                if(h.day === tDay && h.month === tMonth) systemEventsOnDate.push({title: h.title, dateDisplay: `${h.day}/${h.month} (DL)`});
+            });
         }
         if (settings.reminderSettings.lunarHolidays) {
-            HOLIDAYS_LUNAR.forEach(h => { if(h.day === tLunar.day && h.month === tLunar.month) systemEventsOnDate.push({title: h.title, dateDisplay: `${tDay}/${tMonth} (${h.day}/${h.month} AL)`}); });
+            HOLIDAYS_LUNAR.forEach(h => {
+                if(h.day === tLunar.day && h.month === tLunar.month) systemEventsOnDate.push({title: h.title, dateDisplay: `${tDay}/${tMonth} (${h.day}/${h.month} AL)`});
+            });
         }
 
+        // For each System Event found on 'currentDate', calculate when the reminders should trigger
         systemEventsOnDate.forEach(sysEvt => {
             globalConfigs.forEach(conf => {
                 let triggerDate = addDays(currentDate, -conf.daysBefore);
-                triggerDate = setTime(triggerDate, conf.time);
+                triggerDate = setTime(triggerDate, conf.time); // APPLY CONFIG TIME
+
+                // Only add if trigger date is in future or today (comparing time as well)
                 if (triggerDate.getTime() >= new Date().setSeconds(0,0)) {
-                    remindersList.push({ triggerDate, timeStr: conf.time, eventTitle: sysEvt.title, eventDateDisplay: sysEvt.dateDisplay, note: conf.daysBefore === 0 ? 'Nhắc nhở ngày diễn ra' : `Nhắc trước ${conf.daysBefore} ngày`, type: 'system' });
+                    remindersList.push({
+                        triggerDate,
+                        timeStr: conf.time,
+                        eventTitle: sysEvt.title,
+                        eventDateDisplay: sysEvt.dateDisplay,
+                        note: conf.daysBefore === 0 ? 'Nhắc nhở ngày diễn ra' : `Nhắc trước ${conf.daysBefore} ngày`,
+                        type: 'system'
+                    });
                 }
             });
         });
 
+        // --- 2. User Events Occurrence ---
         userEvents.forEach(evt => {
             let isOccurrence = false;
             let dateDisplay = '';
-            if (evt.type === 'solar') { if (evt.day === tDay && evt.month === tMonth) { isOccurrence = true; dateDisplay = `${tDay}/${tMonth} (DL)`; } }
-            else { if (evt.day === tLunar.day && evt.month === tLunar.month) { isOccurrence = true; dateDisplay = `${tDay}/${tMonth} (${tLunar.day}/${tLunar.month} AL)`; } }
+            
+            if (evt.type === 'solar') {
+                if (evt.day === tDay && evt.month === tMonth) {
+                    isOccurrence = true;
+                    dateDisplay = `${tDay}/${tMonth} (DL)`;
+                }
+            } else {
+                if (evt.day === tLunar.day && evt.month === tLunar.month) {
+                    isOccurrence = true;
+                    dateDisplay = `${tDay}/${tMonth} (${tLunar.day}/${tLunar.month} AL)`;
+                }
+            }
 
             if (isOccurrence && evt.reminderConfig) {
+                // Check "At 7am"
                 if (evt.reminderConfig.at7am) {
                     let triggerDate = currentDate;
-                    triggerDate = setTime(triggerDate, '07:00');
+                    triggerDate = setTime(triggerDate, '07:00'); // APPLY 7 AM
+
                     if (triggerDate.getTime() >= new Date().setSeconds(0,0)) {
-                         remindersList.push({ triggerDate, timeStr: '07:00', eventTitle: evt.title, eventDateDisplay: dateDisplay, note: 'Nhắc nhở sáng ngày diễn ra', type: 'event' });
+                         remindersList.push({
+                            triggerDate,
+                            timeStr: '07:00',
+                            eventTitle: evt.title,
+                            eventDateDisplay: dateDisplay,
+                            note: 'Nhắc nhở sáng ngày diễn ra',
+                            type: 'event'
+                        });
                     }
                 }
+                
+                // Check Custom Reminders
                 if (evt.reminderConfig.customReminders) {
                     evt.reminderConfig.customReminders.forEach(cust => {
                          let triggerDate = addDays(currentDate, -cust.daysBefore);
-                         triggerDate = setTime(triggerDate, cust.time);
+                         triggerDate = setTime(triggerDate, cust.time); // APPLY CONFIG TIME
+
                          if (triggerDate.getTime() >= new Date().setSeconds(0,0)) {
-                             remindersList.push({ triggerDate, timeStr: cust.time, eventTitle: evt.title, eventDateDisplay: dateDisplay, note: cust.note || `Nhắc trước ${cust.daysBefore} ngày`, type: 'event' });
+                             remindersList.push({
+                                triggerDate,
+                                timeStr: cust.time,
+                                eventTitle: evt.title,
+                                eventDateDisplay: dateDisplay,
+                                note: cust.note || `Nhắc trước ${cust.daysBefore} ngày`,
+                                type: 'event'
+                            });
                          }
                     });
                 }
             }
         });
     }
+
+    // Sort by Trigger Date then Time
     remindersList.sort((a, b) => a.triggerDate.getTime() - b.triggerDate.getTime());
+
     return remindersList;
 }
 
+// Helper to set time string HH:mm to date
 const setTime = (date: Date, timeStr: string) => {
     const [h, m] = timeStr.split(':').map(Number);
     const newDate = new Date(date);
@@ -239,54 +367,118 @@ const setTime = (date: Date, timeStr: string) => {
     return newDate;
 }
 
-// --- SETTINGS & PROFILE ---
-
 export const saveSettings = (settings: AppSettings) => {
   localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
 };
 
 export const getSettings = (): AppSettings => {
-  const defaults: AppSettings = { bgId: 'bg-1', font: 'inter', darkMode: false, primaryColor: '#D91E18', weekStart: 'monday', reminderSettings: { enabled: true, lunar15_1: true, solarHolidays: true, lunarHolidays: true, defaultReminders: [{ daysBefore: 0, time: '07:00' }, { daysBefore: 1, time: '19:00' }] } };
+  const defaults: AppSettings = { 
+      bgId: 'bg-1', 
+      font: 'inter', 
+      darkMode: false, 
+      primaryColor: '#D91E18',
+      weekStart: 'monday',
+      reminderSettings: {
+          enabled: true,
+          lunar15_1: true,
+          solarHolidays: true,
+          lunarHolidays: true,
+          defaultReminders: [
+             { daysBefore: 0, time: '07:00' },
+             { daysBefore: 1, time: '19:00' }
+          ]
+      }
+  };
+
   try {
     const data = localStorage.getItem(STORAGE_KEY_SETTINGS);
     if (!data) return defaults;
+    
     const parsed = JSON.parse(data);
     let defReminders = parsed.reminderSettings?.defaultReminders;
-    if (!defReminders) defReminders = defaults.reminderSettings.defaultReminders;
-    return { ...defaults, ...parsed, reminderSettings: { ...defaults.reminderSettings, ...(parsed.reminderSettings || {}), defaultReminders: defReminders } };
-  } catch (e) { return defaults; }
+    if (!defReminders) {
+        defReminders = defaults.reminderSettings.defaultReminders;
+    }
+
+    return {
+        ...defaults,
+        ...parsed,
+        reminderSettings: {
+            ...defaults.reminderSettings,
+            ...(parsed.reminderSettings || {}),
+            defaultReminders: defReminders
+        }
+    };
+  } catch (e) {
+    return defaults;
+  }
 };
+
+// --- FIRESTORE BACKUP & RESTORE ---
 
 export const getBackupInfo = async (userId: string) => {
   try {
     const docRef = doc(db, 'users', userId);
     const docSnap = await getDoc(docRef);
-    if (docSnap.exists() && docSnap.data().lastBackup) return { exists: true, lastBackup: new Date(docSnap.data().lastBackup) };
+    if (docSnap.exists() && docSnap.data().lastBackup) {
+      return { 
+        exists: true, 
+        lastBackup: new Date(docSnap.data().lastBackup)
+      };
+    }
     return { exists: false, lastBackup: null };
-  } catch (error) { return { exists: false, lastBackup: null }; }
+  } catch (error) {
+    console.error("Check backup error:", error);
+    return { exists: false, lastBackup: null };
+  }
 }
 
 export const backupData = async (userId: string) => {
   try {
     const events = getEvents();
     const settings = getSettings();
-    await setDoc(doc(db, 'users', userId), { events, settings, lastBackup: new Date().toISOString() }, { merge: true });
+    
+    const dataToBackup = {
+      events,
+      settings,
+      lastBackup: new Date().toISOString()
+    };
+    
+    // Save to Firestore under users/{userId}
+    await setDoc(doc(db, 'users', userId), dataToBackup, { merge: true });
+    
     return true;
-  } catch (error) { return false; }
+  } catch (error) {
+    console.error("Backup error:", error);
+    return false;
+  }
 }
 
 export const restoreData = async (userId: string) => {
   try {
     const docRef = doc(db, 'users', userId);
     const docSnap = await getDoc(docRef);
+
     if (docSnap.exists()) {
       const data = docSnap.data();
-      if (data.events) localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(data.events));
-      if (data.settings) localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(data.settings));
+      
+      if (data.events) {
+        localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(data.events));
+      }
+      if (data.settings) {
+        localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(data.settings));
+      }
       return true;
-    } else { return false; }
-  } catch (error) { return false; }
+    } else {
+      return false;
+    }
+  } catch (error) {
+    console.error("Restore error:", error);
+    return false;
+  }
 }
+
+// --- USER PROFILE STORAGE ---
 
 export const saveUserProfile = async (userId: string, data: Partial<User>) => {
   try {
@@ -296,9 +488,13 @@ export const saveUserProfile = async (userId: string, data: Partial<User>) => {
      if (dateOfBirth !== undefined) payload.dateOfBirth = dateOfBirth;
      if (phoneNumber !== undefined) payload.phoneNumber = phoneNumber;
      if (address !== undefined) payload.address = address;
+
      await setDoc(doc(db, 'users', userId), payload, { merge: true });
      return true;
-  } catch (e) { return false; }
+  } catch (e) {
+     console.error("Error saving profile:", e);
+     return false;
+  }
 };
 
 export const getUserProfile = async (userId: string): Promise<Partial<User>> => {
@@ -307,38 +503,55 @@ export const getUserProfile = async (userId: string): Promise<Partial<User>> => 
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
        const data = docSnap.data();
-       return { name: data.name, role: data.role || 'user', dateOfBirth: data.dateOfBirth, phoneNumber: data.phoneNumber, address: data.address } as Partial<User>;
+       return {
+          name: data.name,
+          role: data.role || 'user',
+          dateOfBirth: data.dateOfBirth,
+          phoneNumber: data.phoneNumber,
+          address: data.address
+       } as Partial<User>;
     }
     return { role: 'user' };
-  } catch (e) { return { role: 'user' }; }
+  } catch (e) {
+    console.error("Error fetching profile:", e);
+    return { role: 'user' };
+  }
 };
 
-// --- ADMIN STATS & USERS ---
+// --- ADMIN FEATURES ---
 
 export const getAdminStats = async () => {
     try {
         const usersSnap = await getDocs(collection(db, 'users'));
         const userCount = usersSnap.size;
+        
         let eventCountToday = 0;
         const today = new Date();
         const d = today.getDate();
         const m = today.getMonth() + 1;
         const lunar = getLunarDate(today);
+
         usersSnap.forEach((doc) => {
             const data = doc.data();
             const events = data.events as CalendarEvent[] || [];
             events.forEach(e => {
-                if (e.type === 'solar') { if (e.day === d && e.month === m) eventCountToday++; }
-                else { if (e.day === lunar.day && e.month === lunar.month) eventCountToday++; }
+                if (e.type === 'solar') {
+                    if (e.day === d && e.month === m) eventCountToday++;
+                } else {
+                    if (e.day === lunar.day && e.month === lunar.month) eventCountToday++;
+                }
             });
         });
+
         return { users: userCount, todayEvents: eventCountToday };
     } catch (e: any) {
+        console.error("Error getting admin stats:", e);
         if (e.code === 'permission-denied') throw new Error('Missing or insufficient permissions.');
         throw e;
     }
 }
 
+// 1. Get All Users (Detailed)
 export const getAllUsers = async (): Promise<User[]> => {
     try {
         const usersSnap = await getDocs(collection(db, 'users'));
@@ -352,65 +565,59 @@ export const getAllUsers = async (): Promise<User[]> => {
                 role: data.role || 'user',
                 dateOfBirth: data.dateOfBirth,
                 phoneNumber: data.phoneNumber,
-                createdAt: data.createdAt
+                createdAt: data.createdAt // Assuming you might save this in future
             });
         });
         return users;
-    } catch (e) { return []; }
+    } catch (e) {
+        console.error("Error getting all users:", e);
+        return [];
+    }
 }
 
-// --- SYSTEM ALERT (BANNER LIST) ---
+// 2. System Alert (Banner) Management
+export const getSystemAlert = async (): Promise<SystemAlert | null> => {
+    try {
+        const docRef = doc(db, 'system', 'globalAlert');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().active) {
+            return docSnap.data() as SystemAlert;
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
 
-export const subscribeToBanners = (callback: (banners: SystemBanner[]) => void) => {
-    const q = query(collection(db, 'system_banners'), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-        const banners: SystemBanner[] = [];
-        snapshot.forEach(doc => {
-            banners.push({ id: doc.id, ...doc.data() } as SystemBanner);
+export const saveSystemAlert = async (alert: SystemAlert): Promise<boolean> => {
+    try {
+        await setDoc(doc(db, 'system', 'globalAlert'), {
+            ...alert,
+            updatedAt: new Date().toISOString()
         });
-        callback(banners);
-    });
+        return true;
+    } catch (e) {
+        console.error("Error saving alert:", e);
+        return false;
+    }
 }
 
-export const addSystemBanner = async (banner: Omit<SystemBanner, 'id' | 'createdAt'>) => {
-    await addDoc(collection(db, 'system_banners'), {
-        ...banner,
-        createdAt: new Date().toISOString()
-    });
+export const removeSystemAlert = async (): Promise<boolean> => {
+    try {
+        await updateDoc(doc(db, 'system', 'globalAlert'), { active: false });
+        return true;
+    } catch (e) {
+        return false;
+    }
 }
 
-export const toggleSystemBanner = async (id: string, currentStatus: boolean) => {
-    await updateDoc(doc(db, 'system_banners', id), { active: !currentStatus });
-}
-
-export const deleteSystemBanner = async (id: string) => {
-    await deleteDoc(doc(db, 'system_banners', id));
-}
-
-// --- ADMIN PUSH CONFIG (PERIODIC) ---
-
-export const subscribeToPushConfigs = (callback: (configs: AdminPushConfig[]) => void) => {
-    const q = query(collection(db, 'admin_push_configs'), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-        const configs: AdminPushConfig[] = [];
-        snapshot.forEach(doc => {
-            configs.push({ id: doc.id, ...doc.data() } as AdminPushConfig);
-        });
-        callback(configs);
-    });
-}
-
-export const addAdminPushConfig = async (config: Omit<AdminPushConfig, 'id' | 'createdAt'>) => {
-    await addDoc(collection(db, 'admin_push_configs'), {
-        ...config,
-        createdAt: new Date().toISOString()
-    });
-}
-
-export const toggleAdminPushConfig = async (id: string, currentStatus: boolean) => {
-    await updateDoc(doc(db, 'admin_push_configs', id), { isActive: !currentStatus });
-}
-
-export const deleteAdminPushConfig = async (id: string) => {
-    await deleteDoc(doc(db, 'admin_push_configs', id));
+// 3. Schedule Push Notification
+export const schedulePushNotification = async (notification: SystemNotification): Promise<boolean> => {
+    try {
+        await addDoc(collection(db, 'system_notifications'), notification);
+        return true;
+    } catch (e) {
+        console.error("Error scheduling push:", e);
+        return false;
+    }
 }
