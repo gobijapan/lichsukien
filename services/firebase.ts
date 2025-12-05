@@ -1,7 +1,8 @@
+
 // @ts-ignore
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore/lite';
+import { getFirestore } from 'firebase/firestore'; // Switched from lite to full
 import { getMessaging } from 'firebase/messaging';
 
 // --- CẤU HÌNH FIREBASE ---

@@ -1,9 +1,12 @@
 
-import { CalendarEvent, AppSettings, LunarDate, User, SystemAlert, SystemNotification } from '../types';
+import { CalendarEvent, AppSettings, LunarDate, User, SystemBanner, AdminPushConfig } from '../types';
 import { HOLIDAYS_LUNAR, HOLIDAYS_SOLAR } from '../constants';
 import { getLunarDate, getSolarDateFromLunar, convertSolar2LunarAlgorithm } from '../utils/lunar';
 import { addDays } from 'date-fns';
-import { doc, setDoc, getDoc, collection, getDocs, addDoc, updateDoc } from 'firebase/firestore/lite';
+import { 
+  doc, setDoc, getDoc, collection, getDocs, addDoc, updateDoc, deleteDoc, 
+  onSnapshot, query, where, orderBy 
+} from 'firebase/firestore';
 import { db, auth } from './firebase';
 
 const STORAGE_KEY_EVENTS = 'vnl_events';
@@ -118,10 +121,6 @@ export const getEventsForDate = (date: Date): CalendarEvent[] => {
   return events;
 };
 
-/**
- * Checks for any active reminders for TODAY.
- * Used for the Bell Icon in Month View and Today View badges.
- */
 export const getRemindersForDate = (date: Date): { title: string, note?: string, type: 'system' | 'event', eventId?: string }[] => {
     const settings = getSettings();
     if (!settings.reminderSettings.enabled) return [];
@@ -228,10 +227,6 @@ export const getRemindersForDate = (date: Date): { title: string, note?: string,
     return uniqueReminders;
 }
 
-/**
- * Projects ALL upcoming reminders for the next 60 days.
- * Used for the Reminder Manager List.
- */
 export const getAllUpcomingReminders = (): { 
     triggerDate: Date; 
     timeStr: string; 
@@ -249,15 +244,12 @@ export const getAllUpcomingReminders = (): {
     const remindersList: any[] = [];
     const globalConfigs = settings.reminderSettings.defaultReminders || [];
 
-    // Iterate through next 60 days to find Event Occurrences
     for (let i = 0; i < lookAheadDays; i++) {
         const currentDate = addDays(today, i);
         const tDay = currentDate.getDate();
         const tMonth = currentDate.getMonth() + 1;
         const tLunar = getLunarDate(currentDate);
 
-        // --- 1. System Events (Holiday/Lunar) Occurrence ---
-        // Identify if 'currentDate' is a special day
         const systemEventsOnDate: {title: string, dateDisplay: string}[] = [];
 
         if (settings.reminderSettings.lunar15_1) {
@@ -275,13 +267,11 @@ export const getAllUpcomingReminders = (): {
             });
         }
 
-        // For each System Event found on 'currentDate', calculate when the reminders should trigger
         systemEventsOnDate.forEach(sysEvt => {
             globalConfigs.forEach(conf => {
                 let triggerDate = addDays(currentDate, -conf.daysBefore);
-                triggerDate = setTime(triggerDate, conf.time); // APPLY CONFIG TIME
+                triggerDate = setTime(triggerDate, conf.time);
 
-                // Only add if trigger date is in future or today (comparing time as well)
                 if (triggerDate.getTime() >= new Date().setSeconds(0,0)) {
                     remindersList.push({
                         triggerDate,
@@ -295,7 +285,6 @@ export const getAllUpcomingReminders = (): {
             });
         });
 
-        // --- 2. User Events Occurrence ---
         userEvents.forEach(evt => {
             let isOccurrence = false;
             let dateDisplay = '';
@@ -313,10 +302,9 @@ export const getAllUpcomingReminders = (): {
             }
 
             if (isOccurrence && evt.reminderConfig) {
-                // Check "At 7am"
                 if (evt.reminderConfig.at7am) {
                     let triggerDate = currentDate;
-                    triggerDate = setTime(triggerDate, '07:00'); // APPLY 7 AM
+                    triggerDate = setTime(triggerDate, '07:00');
 
                     if (triggerDate.getTime() >= new Date().setSeconds(0,0)) {
                          remindersList.push({
@@ -330,11 +318,10 @@ export const getAllUpcomingReminders = (): {
                     }
                 }
                 
-                // Check Custom Reminders
                 if (evt.reminderConfig.customReminders) {
                     evt.reminderConfig.customReminders.forEach(cust => {
                          let triggerDate = addDays(currentDate, -cust.daysBefore);
-                         triggerDate = setTime(triggerDate, cust.time); // APPLY CONFIG TIME
+                         triggerDate = setTime(triggerDate, cust.time);
 
                          if (triggerDate.getTime() >= new Date().setSeconds(0,0)) {
                              remindersList.push({
@@ -352,13 +339,10 @@ export const getAllUpcomingReminders = (): {
         });
     }
 
-    // Sort by Trigger Date then Time
     remindersList.sort((a, b) => a.triggerDate.getTime() - b.triggerDate.getTime());
-
     return remindersList;
 }
 
-// Helper to set time string HH:mm to date
 const setTime = (date: Date, timeStr: string) => {
     const [h, m] = timeStr.split(':').map(Number);
     const newDate = new Date(date);
@@ -414,8 +398,6 @@ export const getSettings = (): AppSettings => {
   }
 };
 
-// --- FIRESTORE BACKUP & RESTORE ---
-
 export const getBackupInfo = async (userId: string) => {
   try {
     const docRef = doc(db, 'users', userId);
@@ -437,16 +419,8 @@ export const backupData = async (userId: string) => {
   try {
     const events = getEvents();
     const settings = getSettings();
-    
-    const dataToBackup = {
-      events,
-      settings,
-      lastBackup: new Date().toISOString()
-    };
-    
-    // Save to Firestore under users/{userId}
+    const dataToBackup = { events, settings, lastBackup: new Date().toISOString() };
     await setDoc(doc(db, 'users', userId), dataToBackup, { merge: true });
-    
     return true;
   } catch (error) {
     console.error("Backup error:", error);
@@ -458,16 +432,10 @@ export const restoreData = async (userId: string) => {
   try {
     const docRef = doc(db, 'users', userId);
     const docSnap = await getDoc(docRef);
-
     if (docSnap.exists()) {
       const data = docSnap.data();
-      
-      if (data.events) {
-        localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(data.events));
-      }
-      if (data.settings) {
-        localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(data.settings));
-      }
+      if (data.events) localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(data.events));
+      if (data.settings) localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(data.settings));
       return true;
     } else {
       return false;
@@ -477,8 +445,6 @@ export const restoreData = async (userId: string) => {
     return false;
   }
 }
-
-// --- USER PROFILE STORAGE ---
 
 export const saveUserProfile = async (userId: string, data: Partial<User>) => {
   try {
@@ -518,8 +484,6 @@ export const getUserProfile = async (userId: string): Promise<Partial<User>> => 
   }
 };
 
-// --- ADMIN FEATURES ---
-
 export const getAdminStats = async () => {
     try {
         const usersSnap = await getDocs(collection(db, 'users'));
@@ -551,7 +515,6 @@ export const getAdminStats = async () => {
     }
 }
 
-// 1. Get All Users (Detailed)
 export const getAllUsers = async (): Promise<User[]> => {
     try {
         const usersSnap = await getDocs(collection(db, 'users'));
@@ -565,7 +528,7 @@ export const getAllUsers = async (): Promise<User[]> => {
                 role: data.role || 'user',
                 dateOfBirth: data.dateOfBirth,
                 phoneNumber: data.phoneNumber,
-                createdAt: data.createdAt // Assuming you might save this in future
+                createdAt: data.createdAt 
             });
         });
         return users;
@@ -575,49 +538,84 @@ export const getAllUsers = async (): Promise<User[]> => {
     }
 }
 
-// 2. System Alert (Banner) Management
-export const getSystemAlert = async (): Promise<SystemAlert | null> => {
+// --- ADMIN: SYSTEM BANNER (LIST) ---
+export const subscribeToBanners = (callback: (banners: SystemBanner[]) => void) => {
+    if (!db) return () => {};
     try {
-        const docRef = doc(db, 'system', 'globalAlert');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && docSnap.data().active) {
-            return docSnap.data() as SystemAlert;
-        }
-        return null;
+        const q = query(collection(db, 'system_banners'), where('active', '==', true), orderBy('createdAt', 'desc'));
+        return onSnapshot(q, (snapshot) => {
+            const banners = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SystemBanner));
+            callback(banners);
+        }, (error) => {
+            console.error("Banner subscription error:", error);
+        });
     } catch (e) {
-        return null;
+        console.error("Setup banner listener failed:", e);
+        return () => {};
     }
 }
 
-export const saveSystemAlert = async (alert: SystemAlert): Promise<boolean> => {
+export const getAllBanners = async (): Promise<SystemBanner[]> => {
     try {
-        await setDoc(doc(db, 'system', 'globalAlert'), {
-            ...alert,
-            updatedAt: new Date().toISOString()
+        const snap = await getDocs(query(collection(db, 'system_banners'), orderBy('createdAt', 'desc')));
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SystemBanner));
+    } catch (e) { return []; }
+}
+
+export const addSystemBanner = async (banner: Partial<SystemBanner>): Promise<boolean> => {
+    try {
+        await addDoc(collection(db, 'system_banners'), {
+            ...banner,
+            active: true,
+            createdAt: new Date().toISOString()
         });
         return true;
-    } catch (e) {
-        console.error("Error saving alert:", e);
-        return false;
-    }
+    } catch (e) { return false; }
 }
 
-export const removeSystemAlert = async (): Promise<boolean> => {
+export const deleteSystemBanner = async (id: string): Promise<boolean> => {
     try {
-        await updateDoc(doc(db, 'system', 'globalAlert'), { active: false });
+        await deleteDoc(doc(db, 'system_banners', id));
         return true;
-    } catch (e) {
-        return false;
-    }
+    } catch (e) { return false; }
 }
 
-// 3. Schedule Push Notification
-export const schedulePushNotification = async (notification: SystemNotification): Promise<boolean> => {
+export const toggleSystemBanner = async (id: string, currentState: boolean): Promise<boolean> => {
     try {
-        await addDoc(collection(db, 'system_notifications'), notification);
+        await updateDoc(doc(db, 'system_banners', id), { active: !currentState });
         return true;
-    } catch (e) {
-        console.error("Error scheduling push:", e);
-        return false;
-    }
+    } catch (e) { return false; }
+}
+
+// --- ADMIN: PUSH CONFIGS (LIST) ---
+export const getAllPushConfigs = async (): Promise<AdminPushConfig[]> => {
+    try {
+        const snap = await getDocs(query(collection(db, 'admin_push_configs'), orderBy('createdAt', 'desc')));
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminPushConfig));
+    } catch (e) { return []; }
+}
+
+export const addPushConfig = async (config: Partial<AdminPushConfig>): Promise<boolean> => {
+    try {
+        await addDoc(collection(db, 'admin_push_configs'), {
+            ...config,
+            isActive: true,
+            createdAt: new Date().toISOString()
+        });
+        return true;
+    } catch (e) { return false; }
+}
+
+export const deletePushConfig = async (id: string): Promise<boolean> => {
+    try {
+        await deleteDoc(doc(db, 'admin_push_configs', id));
+        return true;
+    } catch (e) { return false; }
+}
+
+export const togglePushConfig = async (id: string, currentState: boolean): Promise<boolean> => {
+    try {
+        await updateDoc(doc(db, 'admin_push_configs', id), { isActive: !currentState });
+        return true;
+    } catch (e) { return false; }
 }

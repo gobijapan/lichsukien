@@ -1,6 +1,6 @@
 
 import { getToken } from 'firebase/messaging';
-import { doc, setDoc } from 'firebase/firestore/lite';
+import { doc, setDoc } from 'firebase/firestore';
 import { messaging, db } from './firebase';
 
 export const requestNotificationPermission = async (userId: string): Promise<{ success: boolean; error?: string }> => {
