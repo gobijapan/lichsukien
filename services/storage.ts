@@ -448,9 +448,10 @@ export const restoreData = async (userId: string) => {
 
 export const saveUserProfile = async (userId: string, data: Partial<User>) => {
   try {
-     const { name, dateOfBirth, phoneNumber, address } = data;
+     const { name, dateOfBirth, phoneNumber, address, email } = data;
      const payload: any = {};
      if (name !== undefined) payload.name = name;
+     if (email !== undefined) payload.email = email;
      if (dateOfBirth !== undefined) payload.dateOfBirth = dateOfBirth;
      if (phoneNumber !== undefined) payload.phoneNumber = phoneNumber;
      if (address !== undefined) payload.address = address;
