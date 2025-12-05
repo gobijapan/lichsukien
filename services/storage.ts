@@ -539,6 +539,7 @@ export const getAllUsers = async (): Promise<User[]> => {
 }
 
 // --- ADMIN: SYSTEM BANNER (LIST) ---
+// Sort by createdAt desc to show newest first
 export const subscribeToBanners = (callback: (banners: SystemBanner[]) => void) => {
     if (!db) return () => {};
     try {
@@ -588,6 +589,7 @@ export const toggleSystemBanner = async (id: string, currentState: boolean): Pro
 }
 
 // --- ADMIN: PUSH CONFIGS (LIST) ---
+// Sort by createdAt desc to show newest first
 export const getAllPushConfigs = async (): Promise<AdminPushConfig[]> => {
     try {
         const snap = await getDocs(query(collection(db, 'admin_push_configs'), orderBy('createdAt', 'desc')));
