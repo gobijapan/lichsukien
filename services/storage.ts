@@ -1,9 +1,9 @@
 
-import { CalendarEvent, AppSettings, LunarDate, User } from '../types';
+import { CalendarEvent, AppSettings, LunarDate, User, SystemAlert, SystemNotification } from '../types';
 import { HOLIDAYS_LUNAR, HOLIDAYS_SOLAR } from '../constants';
 import { getLunarDate, getSolarDateFromLunar, convertSolar2LunarAlgorithm } from '../utils/lunar';
-import { addDays, format, differenceInDays, startOfDay, isAfter } from 'date-fns';
-import { doc, setDoc, getDoc, collection, getDocs } from 'firebase/firestore/lite';
+import { addDays } from 'date-fns';
+import { doc, setDoc, getDoc, collection, getDocs, addDoc, updateDoc } from 'firebase/firestore/lite';
 import { db, auth } from './firebase';
 
 const STORAGE_KEY_EVENTS = 'vnl_events';
@@ -367,12 +367,6 @@ const setTime = (date: Date, timeStr: string) => {
     return newDate;
 }
 
-const isSameDay = (d1: Date, d2: Date) => {
-    return d1.getDate() === d2.getDate() && 
-           d1.getMonth() === d2.getMonth() && 
-           d1.getFullYear() === d2.getFullYear();
-}
-
 export const saveSettings = (settings: AppSettings) => {
   localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
 };
@@ -488,7 +482,6 @@ export const restoreData = async (userId: string) => {
 
 export const saveUserProfile = async (userId: string, data: Partial<User>) => {
   try {
-     // Only save profile fields
      const { name, dateOfBirth, phoneNumber, address } = data;
      const payload: any = {};
      if (name !== undefined) payload.name = name;
@@ -512,7 +505,7 @@ export const getUserProfile = async (userId: string): Promise<Partial<User>> => 
        const data = docSnap.data();
        return {
           name: data.name,
-          role: data.role || 'user', // Fetch role here
+          role: data.role || 'user',
           dateOfBirth: data.dateOfBirth,
           phoneNumber: data.phoneNumber,
           address: data.address
@@ -525,7 +518,8 @@ export const getUserProfile = async (userId: string): Promise<Partial<User>> => 
   }
 };
 
-// --- ADMIN STATS ---
+// --- ADMIN FEATURES ---
+
 export const getAdminStats = async () => {
     try {
         const usersSnap = await getDocs(collection(db, 'users'));
@@ -540,8 +534,6 @@ export const getAdminStats = async () => {
         usersSnap.forEach((doc) => {
             const data = doc.data();
             const events = data.events as CalendarEvent[] || [];
-            
-            // Count matching events
             events.forEach(e => {
                 if (e.type === 'solar') {
                     if (e.day === d && e.month === m) eventCountToday++;
@@ -551,13 +543,81 @@ export const getAdminStats = async () => {
             });
         });
 
-        return {
-            users: userCount,
-            todayEvents: eventCountToday
-        };
+        return { users: userCount, todayEvents: eventCountToday };
     } catch (e: any) {
         console.error("Error getting admin stats:", e);
         if (e.code === 'permission-denied') throw new Error('Missing or insufficient permissions.');
         throw e;
+    }
+}
+
+// 1. Get All Users (Detailed)
+export const getAllUsers = async (): Promise<User[]> => {
+    try {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        const users: User[] = [];
+        usersSnap.forEach(doc => {
+            const data = doc.data();
+            users.push({
+                id: doc.id,
+                email: data.email || 'N/A',
+                name: data.name || 'Người dùng',
+                role: data.role || 'user',
+                dateOfBirth: data.dateOfBirth,
+                phoneNumber: data.phoneNumber,
+                createdAt: data.createdAt // Assuming you might save this in future
+            });
+        });
+        return users;
+    } catch (e) {
+        console.error("Error getting all users:", e);
+        return [];
+    }
+}
+
+// 2. System Alert (Banner) Management
+export const getSystemAlert = async (): Promise<SystemAlert | null> => {
+    try {
+        const docRef = doc(db, 'system', 'globalAlert');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().active) {
+            return docSnap.data() as SystemAlert;
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
+
+export const saveSystemAlert = async (alert: SystemAlert): Promise<boolean> => {
+    try {
+        await setDoc(doc(db, 'system', 'globalAlert'), {
+            ...alert,
+            updatedAt: new Date().toISOString()
+        });
+        return true;
+    } catch (e) {
+        console.error("Error saving alert:", e);
+        return false;
+    }
+}
+
+export const removeSystemAlert = async (): Promise<boolean> => {
+    try {
+        await updateDoc(doc(db, 'system', 'globalAlert'), { active: false });
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// 3. Schedule Push Notification
+export const schedulePushNotification = async (notification: SystemNotification): Promise<boolean> => {
+    try {
+        await addDoc(collection(db, 'system_notifications'), notification);
+        return true;
+    } catch (e) {
+        console.error("Error scheduling push:", e);
+        return false;
     }
 }
