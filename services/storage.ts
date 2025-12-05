@@ -1,19 +1,17 @@
 
-import { CalendarEvent, AppSettings, LunarDate, User, SystemBanner, AdminPushConfig } from '../types';
+import { CalendarEvent, AppSettings, User, SystemAlert, SystemNotification, SystemBanner, AdminPushConfig } from '../types';
 import { HOLIDAYS_LUNAR, HOLIDAYS_SOLAR } from '../constants';
-import { getLunarDate, getSolarDateFromLunar, convertSolar2LunarAlgorithm } from '../utils/lunar';
+import { getLunarDate } from '../utils/lunar';
 import { addDays } from 'date-fns';
-import { 
-  doc, setDoc, getDoc, collection, getDocs, addDoc, updateDoc, deleteDoc, 
-  onSnapshot, query, where, orderBy 
-} from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, getDocs, addDoc, updateDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore/lite';
 import { db, auth } from './firebase';
 
 const STORAGE_KEY_EVENTS = 'vnl_events';
 const STORAGE_KEY_SETTINGS = 'vnl_settings';
 
+// ... (Keep existing Event functions: saveEvent, deleteEvent, getEvents, getEventsForDate, getRemindersForDate, getAllUpcomingReminders, setTime, saveSettings, getSettings, getBackupInfo, backupData, restoreData, saveUserProfile, getUserProfile) ...
+
 export const saveEvent = async (event: CalendarEvent): Promise<void> => {
-  // Local Save
   const current = getEvents();
   const index = current.findIndex(e => e.id === event.id);
   let updated;
@@ -25,7 +23,6 @@ export const saveEvent = async (event: CalendarEvent): Promise<void> => {
   }
   localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(updated));
 
-  // Hybrid Sync: Sync to Firestore immediately if logged in
   if (auth.currentUser) {
       try {
           await setDoc(doc(db, 'users', auth.currentUser.uid), { events: updated }, { merge: true });
@@ -33,17 +30,14 @@ export const saveEvent = async (event: CalendarEvent): Promise<void> => {
           console.error("Auto-sync error:", e);
       }
   }
-
   return new Promise((resolve) => setTimeout(resolve, 100));
 };
 
 export const deleteEvent = async (id: string): Promise<void> => {
-  // Local Save
   const current = getEvents();
   const updated = current.filter(e => e.id !== id);
   localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(updated));
 
-  // Hybrid Sync
   if (auth.currentUser) {
       try {
           await setDoc(doc(db, 'users', auth.currentUser.uid), { events: updated }, { merge: true });
@@ -51,7 +45,6 @@ export const deleteEvent = async (id: string): Promise<void> => {
           console.error("Auto-sync error:", e);
       }
   }
-
   return new Promise((resolve) => setTimeout(resolve, 100));
 };
 
@@ -64,9 +57,6 @@ export const getEvents = (): CalendarEvent[] => {
   }
 };
 
-/**
- * Get all events (user + system) for a specific Date
- */
 export const getEventsForDate = (date: Date): CalendarEvent[] => {
   const lunar = getLunarDate(date);
   const d = date.getDate();
@@ -75,7 +65,6 @@ export const getEventsForDate = (date: Date): CalendarEvent[] => {
 
   const events: CalendarEvent[] = [];
 
-  // Check Solar Holidays
   HOLIDAYS_SOLAR.forEach(h => {
     if (h.day === d && h.month === m) {
       events.push({
@@ -92,7 +81,6 @@ export const getEventsForDate = (date: Date): CalendarEvent[] => {
     }
   });
 
-  // Check Lunar Holidays
   HOLIDAYS_LUNAR.forEach(h => {
     if (h.day === lunar.day && h.month === lunar.month) {
       events.push({
@@ -109,7 +97,6 @@ export const getEventsForDate = (date: Date): CalendarEvent[] => {
     }
   });
 
-  // Check User Events
   userEvents.forEach(e => {
     if (e.type === 'solar') {
       if (e.day === d && e.month === m) events.push(e);
@@ -129,14 +116,12 @@ export const getRemindersForDate = (date: Date): { title: string, note?: string,
     const reminders: { title: string, note?: string, type: 'system' | 'event', eventId?: string }[] = [];
     const globalConfigs = settings.reminderSettings.defaultReminders || [];
 
-    // --- SYSTEM EVENTS & GLOBAL REMINDERS ---
     globalConfigs.forEach(config => {
         const targetDate = addDays(date, config.daysBefore);
         const tLunar = getLunarDate(targetDate);
         const tDay = targetDate.getDate();
         const tMonth = targetDate.getMonth() + 1;
 
-        // 1. Check Rằm & Mùng 1
         if (settings.reminderSettings.lunar15_1) {
             if (tLunar.day === 1) {
                  reminders.push({ 
@@ -154,7 +139,6 @@ export const getRemindersForDate = (date: Date): { title: string, note?: string,
             }
         }
 
-        // 2. Check Solar Holidays
         if (settings.reminderSettings.solarHolidays) {
             HOLIDAYS_SOLAR.forEach(h => {
                 if(h.day === tDay && h.month === tMonth) {
@@ -167,7 +151,6 @@ export const getRemindersForDate = (date: Date): { title: string, note?: string,
             });
         }
 
-        // 3. Check Lunar Holidays
         if (settings.reminderSettings.lunarHolidays) {
             HOLIDAYS_LUNAR.forEach(h => {
                 if(h.day === tLunar.day && h.month === tLunar.month) {
@@ -181,7 +164,6 @@ export const getRemindersForDate = (date: Date): { title: string, note?: string,
         }
     });
 
-    // --- USER EVENT CUSTOM REMINDERS ---
     for(let offset = 0; offset <= 30; offset++) {
         const targetDate = addDays(date, offset);
         const tLunar = getLunarDate(targetDate);
@@ -223,7 +205,6 @@ export const getRemindersForDate = (date: Date): { title: string, note?: string,
     }
 
     const uniqueReminders = reminders.filter((v, i, a) => a.findIndex(t => (t.title === v.title && t.note === v.note)) === i);
-
     return uniqueReminders;
 }
 
@@ -377,13 +358,11 @@ export const getSettings = (): AppSettings => {
   try {
     const data = localStorage.getItem(STORAGE_KEY_SETTINGS);
     if (!data) return defaults;
-    
     const parsed = JSON.parse(data);
     let defReminders = parsed.reminderSettings?.defaultReminders;
     if (!defReminders) {
         defReminders = defaults.reminderSettings.defaultReminders;
     }
-
     return {
         ...defaults,
         ...parsed,
@@ -403,10 +382,7 @@ export const getBackupInfo = async (userId: string) => {
     const docRef = doc(db, 'users', userId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists() && docSnap.data().lastBackup) {
-      return { 
-        exists: true, 
-        lastBackup: new Date(docSnap.data().lastBackup)
-      };
+      return { exists: true, lastBackup: new Date(docSnap.data().lastBackup) };
     }
     return { exists: false, lastBackup: null };
   } catch (error) {
@@ -454,7 +430,6 @@ export const saveUserProfile = async (userId: string, data: Partial<User>) => {
      if (dateOfBirth !== undefined) payload.dateOfBirth = dateOfBirth;
      if (phoneNumber !== undefined) payload.phoneNumber = phoneNumber;
      if (address !== undefined) payload.address = address;
-
      await setDoc(doc(db, 'users', userId), payload, { merge: true });
      return true;
   } catch (e) {
@@ -538,84 +513,128 @@ export const getAllUsers = async (): Promise<User[]> => {
     }
 }
 
-// --- ADMIN: SYSTEM BANNER (LIST) ---
-export const subscribeToBanners = (callback: (banners: SystemBanner[]) => void) => {
-    if (!db) return () => {};
+// === NEW ADMIN FUNCTIONS (Using Lite SDK for Lists) ===
+
+// 1. SYSTEM BANNERS (LOA PHƯỜNG)
+export const getSystemBannersList = async (): Promise<SystemBanner[]> => {
     try {
-        const q = query(collection(db, 'system_banners'), where('active', '==', true), orderBy('createdAt', 'desc'));
-        return onSnapshot(q, (snapshot) => {
-            const banners = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SystemBanner));
-            callback(banners);
-        }, (error) => {
-            console.error("Banner subscription error:", error);
-        });
+        const q = query(collection(db, 'system_banners'), orderBy('createdAt', 'desc'));
+        const snap = await getDocs(q);
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SystemBanner));
     } catch (e) {
-        console.error("Setup banner listener failed:", e);
-        return () => {};
+        console.error("Error fetching banners:", e);
+        return [];
     }
 }
 
-export const getAllBanners = async (): Promise<SystemBanner[]> => {
-    try {
-        const snap = await getDocs(query(collection(db, 'system_banners'), orderBy('createdAt', 'desc')));
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SystemBanner));
-    } catch (e) { return []; }
-}
-
-export const addSystemBanner = async (banner: Partial<SystemBanner>): Promise<boolean> => {
+export const addSystemBanner = async (banner: Omit<SystemBanner, 'id' | 'createdAt'>): Promise<boolean> => {
     try {
         await addDoc(collection(db, 'system_banners'), {
             ...banner,
-            active: true,
             createdAt: new Date().toISOString()
         });
         return true;
-    } catch (e) { return false; }
+    } catch (e) {
+        console.error("Error adding banner:", e);
+        return false;
+    }
 }
 
 export const deleteSystemBanner = async (id: string): Promise<boolean> => {
     try {
         await deleteDoc(doc(db, 'system_banners', id));
         return true;
-    } catch (e) { return false; }
+    } catch (e) {
+        console.error("Error deleting banner:", e);
+        return false;
+    }
 }
 
-export const toggleSystemBanner = async (id: string, currentState: boolean): Promise<boolean> => {
+export const toggleSystemBanner = async (id: string, currentStatus: boolean): Promise<boolean> => {
     try {
-        await updateDoc(doc(db, 'system_banners', id), { active: !currentState });
+        await updateDoc(doc(db, 'system_banners', id), { isActive: !currentStatus });
         return true;
-    } catch (e) { return false; }
+    } catch (e) {
+        console.error("Error toggling banner:", e);
+        return false;
+    }
 }
 
-// --- ADMIN: PUSH CONFIGS (LIST) ---
-export const getAllPushConfigs = async (): Promise<AdminPushConfig[]> => {
+// COMPATIBILITY: Update getSystemAlert to fetch the active banner from the new LIST
+// This ensures App.tsx (Banner) works without changing App.tsx logic too much.
+export const getSystemAlert = async (): Promise<SystemAlert | null> => {
     try {
-        const snap = await getDocs(query(collection(db, 'admin_push_configs'), orderBy('createdAt', 'desc')));
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminPushConfig));
-    } catch (e) { return []; }
+        // Find the most recent active banner
+        const q = query(collection(db, 'system_banners'), where('isActive', '==', true), orderBy('createdAt', 'desc'));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+            const data = snap.docs[0].data();
+            return {
+                active: true,
+                content: data.content,
+                type: data.type
+            };
+        }
+        return null;
+    } catch (e) {
+        // Fallback or permission error
+        return null;
+    }
 }
 
-export const addPushConfig = async (config: Partial<AdminPushConfig>): Promise<boolean> => {
+// 2. ADMIN PUSH CONFIGS
+export const getPushConfigsList = async (): Promise<AdminPushConfig[]> => {
+    try {
+        const q = query(collection(db, 'admin_push_configs'), orderBy('createdAt', 'desc'));
+        const snap = await getDocs(q);
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminPushConfig));
+    } catch (e) {
+        console.error("Error fetching push configs:", e);
+        return [];
+    }
+}
+
+export const addPushConfig = async (config: Omit<AdminPushConfig, 'id' | 'createdAt'>): Promise<boolean> => {
     try {
         await addDoc(collection(db, 'admin_push_configs'), {
             ...config,
-            isActive: true,
             createdAt: new Date().toISOString()
         });
         return true;
-    } catch (e) { return false; }
+    } catch (e) {
+        console.error("Error adding push config:", e);
+        return false;
+    }
 }
 
 export const deletePushConfig = async (id: string): Promise<boolean> => {
     try {
         await deleteDoc(doc(db, 'admin_push_configs', id));
         return true;
-    } catch (e) { return false; }
+    } catch (e) {
+        console.error("Error deleting push config:", e);
+        return false;
+    }
 }
 
-export const togglePushConfig = async (id: string, currentState: boolean): Promise<boolean> => {
+export const togglePushConfig = async (id: string, currentStatus: boolean): Promise<boolean> => {
     try {
-        await updateDoc(doc(db, 'admin_push_configs', id), { isActive: !currentState });
+        await updateDoc(doc(db, 'admin_push_configs', id), { isActive: !currentStatus });
         return true;
-    } catch (e) { return false; }
+    } catch (e) {
+        console.error("Error toggling push config:", e);
+        return false;
+    }
 }
+
+// DEPRECATED but kept for reference
+export const saveSystemAlert = async (alert: SystemAlert): Promise<boolean> => {
+    // Redirect to new system if Admin tries to use old method, or just use new addSystemBanner
+    return await addSystemBanner({ 
+        content: alert.content, 
+        type: alert.type, 
+        isActive: alert.active 
+    });
+}
+export const removeSystemAlert = async (): Promise<boolean> => { return false; }
+export const schedulePushNotification = async (notification: SystemNotification): Promise<boolean> => { return false; }
