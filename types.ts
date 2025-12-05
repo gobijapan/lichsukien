@@ -79,24 +79,41 @@ export interface User {
   createdAt?: string; // Added for Admin view
 }
 
-// Updated System Banner for Carousel
+// Old Single Alert (Deprecated but kept for type compatibility if needed)
+export interface SystemAlert {
+  active: boolean;
+  content: string;
+  type: 'info' | 'warning' | 'error';
+  updatedAt?: string;
+}
+
+// New List-based Banner
 export interface SystemBanner {
   id: string;
   content: string;
   type: 'info' | 'warning' | 'error';
-  active: boolean;
+  isActive: boolean;
   createdAt: string;
 }
 
-// Updated Push Config for Periodic Schedule
+// Admin Push Configuration
 export interface AdminPushConfig {
   id: string;
   title: string;
   body: string;
-  time: string; // HH:mm (00, 15, 30, 45)
+  time: string; // HH:mm (15-min interval)
   frequency: 'once' | 'daily';
   isActive: boolean;
+  createdAt: string;
   lastSent?: string;
+}
+
+export interface SystemNotification {
+  id?: string;
+  title: string;
+  body: string;
+  scheduledAt: string;
+  status: 'pending' | 'sent' | 'failed';
   createdAt: string;
 }
 
