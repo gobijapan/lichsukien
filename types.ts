@@ -8,18 +8,20 @@ export interface CalendarEvent {
   month: number;
   isRecurring: boolean;
   category: 'anniversary' | 'birthday' | 'holiday' | 'other';
+  // Advanced Fields
   details?: string;
   location?: string;
-  originalYear?: number; 
+  originalYear?: number; // For anniversary calculation
   reminderConfig?: {
     at7am: boolean;
     customReminders?: {
       id: string;
       daysBefore: number;
-      time: string; 
-      note?: string; 
+      time: string; // HH:mm
+      note?: string; // Limit 300 chars
     }[];
   };
+  // UI Helpers (Computed)
   isSystem?: boolean; 
   displayDate?: string; 
 }
@@ -43,23 +45,24 @@ export interface LunarDate {
 
 export interface GlobalReminderConfig {
   daysBefore: number;
-  time: string;
+  time: string; // HH:mm
 }
 
 export interface ReminderSettings {
   enabled: boolean;
-  lunar15_1: boolean;
+  lunar15_1: boolean; // Rằm & Mùng 1
   solarHolidays: boolean;
   lunarHolidays: boolean;
+  // Replaced single alertTime with multiple configs
   defaultReminders: GlobalReminderConfig[]; 
 }
 
 export interface AppSettings {
   bgId: string;
-  customBg?: string; 
-  font: string; 
+  customBg?: string; // Base64 string for user uploaded image
+  font: string; // key from FONTS
   darkMode: boolean;
-  primaryColor: string; 
+  primaryColor: string; // Hex code
   weekStart: 'monday' | 'sunday';
   reminderSettings: ReminderSettings;
 }
@@ -69,30 +72,26 @@ export interface User {
   email: string;
   role: 'user' | 'admin';
   name: string;
+  // Extended Profile
   dateOfBirth?: string;
   phoneNumber?: string;
   address?: string;
-  createdAt?: string;
+  createdAt?: string; // Added for Admin view
 }
 
-// NEW: System Banner (Loa Phường) as List Item
-export interface SystemBanner {
-  id: string;
+export interface SystemAlert {
+  active: boolean;
   content: string;
   type: 'info' | 'warning' | 'error';
-  isActive: boolean;
-  createdAt: string;
+  updatedAt?: string;
 }
 
-// NEW: Admin Push Configuration
-export interface AdminPushConfig {
-  id: string;
+export interface SystemNotification {
+  id?: string;
   title: string;
   body: string;
-  time: string; // HH:mm (15 min interval)
-  frequency: 'once' | 'daily';
-  isActive: boolean; // Checkbox to enable/disable
-  lastSent?: string;
+  scheduledAt: string;
+  status: 'pending' | 'sent' | 'failed';
   createdAt: string;
 }
 
