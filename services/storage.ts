@@ -524,34 +524,26 @@ export const getAdminStats = async () => {
     try {
         const usersSnap = await getDocs(collection(db, 'users'));
         const userCount = usersSnap.size;
-        
         let eventCountToday = 0;
         const today = new Date();
         const d = today.getDate();
         const m = today.getMonth() + 1;
         const lunar = getLunarDate(today);
-
         usersSnap.forEach((doc) => {
             const data = doc.data();
             const events = data.events as CalendarEvent[] || [];
             events.forEach(e => {
-                if (e.type === 'solar') {
-                    if (e.day === d && e.month === m) eventCountToday++;
-                } else {
-                    if (e.day === lunar.day && e.month === lunar.month) eventCountToday++;
-                }
+                if (e.type === 'solar') { if (e.day === d && e.month === m) eventCountToday++; }
+                else { if (e.day === lunar.day && e.month === lunar.month) eventCountToday++; }
             });
         });
-
         return { users: userCount, todayEvents: eventCountToday };
     } catch (e: any) {
-        console.error("Error getting admin stats:", e);
         if (e.code === 'permission-denied') throw new Error('Missing or insufficient permissions.');
         throw e;
     }
 }
 
-// 1. Get All Users (Detailed)
 export const getAllUsers = async (): Promise<User[]> => {
     try {
         const usersSnap = await getDocs(collection(db, 'users'));
@@ -565,59 +557,65 @@ export const getAllUsers = async (): Promise<User[]> => {
                 role: data.role || 'user',
                 dateOfBirth: data.dateOfBirth,
                 phoneNumber: data.phoneNumber,
-                createdAt: data.createdAt // Assuming you might save this in future
+                createdAt: data.createdAt
             });
         });
         return users;
-    } catch (e) {
-        console.error("Error getting all users:", e);
-        return [];
-    }
+    } catch (e) { return []; }
 }
 
-// 2. System Alert (Banner) Management
-export const getSystemAlert = async (): Promise<SystemAlert | null> => {
-    try {
-        const docRef = doc(db, 'system', 'globalAlert');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && docSnap.data().active) {
-            return docSnap.data() as SystemAlert;
-        }
-        return null;
-    } catch (e) {
-        return null;
-    }
-}
+// --- SYSTEM ALERT (BANNER LIST) ---
 
-export const saveSystemAlert = async (alert: SystemAlert): Promise<boolean> => {
-    try {
-        await setDoc(doc(db, 'system', 'globalAlert'), {
-            ...alert,
-            updatedAt: new Date().toISOString()
+export const subscribeToBanners = (callback: (banners: SystemBanner[]) => void) => {
+    const q = query(collection(db, 'system_banners'), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+        const banners: SystemBanner[] = [];
+        snapshot.forEach(doc => {
+            banners.push({ id: doc.id, ...doc.data() } as SystemBanner);
         });
-        return true;
-    } catch (e) {
-        console.error("Error saving alert:", e);
-        return false;
-    }
+        callback(banners);
+    });
 }
 
-export const removeSystemAlert = async (): Promise<boolean> => {
-    try {
-        await updateDoc(doc(db, 'system', 'globalAlert'), { active: false });
-        return true;
-    } catch (e) {
-        return false;
-    }
+export const addSystemBanner = async (banner: Omit<SystemBanner, 'id' | 'createdAt'>) => {
+    await addDoc(collection(db, 'system_banners'), {
+        ...banner,
+        createdAt: new Date().toISOString()
+    });
 }
 
-// 3. Schedule Push Notification
-export const schedulePushNotification = async (notification: SystemNotification): Promise<boolean> => {
-    try {
-        await addDoc(collection(db, 'system_notifications'), notification);
-        return true;
-    } catch (e) {
-        console.error("Error scheduling push:", e);
-        return false;
-    }
+export const toggleSystemBanner = async (id: string, currentStatus: boolean) => {
+    await updateDoc(doc(db, 'system_banners', id), { active: !currentStatus });
+}
+
+export const deleteSystemBanner = async (id: string) => {
+    await deleteDoc(doc(db, 'system_banners', id));
+}
+
+// --- ADMIN PUSH CONFIG (PERIODIC) ---
+
+export const subscribeToPushConfigs = (callback: (configs: AdminPushConfig[]) => void) => {
+    const q = query(collection(db, 'admin_push_configs'), orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+        const configs: AdminPushConfig[] = [];
+        snapshot.forEach(doc => {
+            configs.push({ id: doc.id, ...doc.data() } as AdminPushConfig);
+        });
+        callback(configs);
+    });
+}
+
+export const addAdminPushConfig = async (config: Omit<AdminPushConfig, 'id' | 'createdAt'>) => {
+    await addDoc(collection(db, 'admin_push_configs'), {
+        ...config,
+        createdAt: new Date().toISOString()
+    });
+}
+
+export const toggleAdminPushConfig = async (id: string, currentStatus: boolean) => {
+    await updateDoc(doc(db, 'admin_push_configs', id), { isActive: !currentStatus });
+}
+
+export const deleteAdminPushConfig = async (id: string) => {
+    await deleteDoc(doc(db, 'admin_push_configs', id));
 }
