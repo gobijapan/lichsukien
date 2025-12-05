@@ -1,12 +1,12 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { AppSettings, User, GlobalReminderConfig } from '../types';
-import { Image, Type, LogOut, User as UserIcon, Palette, Database, ChevronRight, CloudUpload, CloudDownload, Moon, Sun, Monitor, Upload, Bell, Clock, Plus, MinusCircle, LogIn, Edit3, X, MapPin, Phone, Calendar, Shield, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Image, Type, LogOut, User as UserIcon, Palette, Database, ChevronRight, CloudUpload, CloudDownload, Moon, Sun, Monitor, Upload, Bell, Clock, Plus, MinusCircle, LogIn, Edit3, X, MapPin, Phone, Calendar, Shield, Loader2, AlertTriangle, CheckCircle2, Ban } from 'lucide-react';
 import { BACKGROUNDS, FONTS } from '../constants';
 import { backupData, restoreData, saveUserProfile, getBackupInfo } from '../services/storage';
 import { auth } from '../services/firebase';
 import { format } from 'date-fns';
-import { vi } from 'date-fns/locale';
+import vi from 'date-fns/locale/vi';
 import { requestNotificationPermission } from '../services/notification';
 
 interface SettingsViewProps {
@@ -60,7 +60,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, updateSettings, f
   const [backupStep, setBackupStep] = useState<'idle' | 'confirm' | 'processing' | 'success' | 'error'>('idle');
   const [restoreStep, setRestoreStep] = useState<'idle' | 'check' | 'confirm' | 'processing' | 'success' | 'error' | 'notfound'>('idle');
   const [backupInfo, setBackupInfo] = useState<Date | null>(null);
+  
+  // Notification State
   const [notifLoading, setNotifLoading] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>('default');
+
+  useEffect(() => {
+      // Check current permission on mount
+      if ('Notification' in window) {
+          setNotifPermission(Notification.permission);
+      }
+  }, []);
 
   // --- BACKUP LOGIC ---
   const startBackup = () => {
@@ -198,6 +208,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, updateSettings, f
       const result = await requestNotificationPermission(user.id);
       setNotifLoading(false);
       
+      // Update permission state
+      if ('Notification' in window) {
+          setNotifPermission(Notification.permission);
+      }
+      
       if (result.success) {
           alert("✅ Đã đăng ký nhận thông báo thành công!");
           // Auto enable switch
@@ -207,6 +222,35 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, updateSettings, f
       } else {
           alert(`❌ Lỗi kích hoạt: ${result.error}`);
       }
+  }
+
+  // Render Notification Button based on State
+  const renderNotifButton = () => {
+      if (notifPermission === 'granted') {
+          return (
+              <button disabled className="w-full p-3 rounded-xl bg-green-500/20 border border-green-500/30 text-green-100 font-bold text-sm flex items-center justify-center gap-2 cursor-not-allowed opacity-80">
+                  <CheckCircle2 size={16} /> ✅ Đã kích hoạt trên thiết bị này
+              </button>
+          );
+      }
+      if (notifPermission === 'denied') {
+          return (
+              <button disabled className="w-full p-3 rounded-xl bg-gray-500/20 border border-gray-500/30 text-gray-300 font-bold text-sm flex items-center justify-center gap-2 cursor-not-allowed">
+                  <Ban size={16} /> 🚫 Quyền thông báo đã bị chặn
+              </button>
+          );
+      }
+      // Default
+      return (
+          <button 
+                onClick={activateNotifications}
+                disabled={notifLoading}
+                className="w-full p-3 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-100 font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-600/30 active:scale-95 transition-all"
+            >
+                {notifLoading ? <Loader2 size={16} className="animate-spin" /> : <Bell size={16} />}
+                {notifLoading ? "Đang xử lý..." : "🔔 Kích hoạt thông báo ngay"}
+            </button>
+      );
   }
 
   return (
@@ -410,15 +454,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, updateSettings, f
             {settings.reminderSettings.enabled && (
                 <div className="p-4 space-y-4 animate-in slide-in-from-top-2">
                     
-                    {/* Manual Activation Button */}
-                    <button 
-                        onClick={activateNotifications}
-                        disabled={notifLoading}
-                        className="w-full p-3 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-100 font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-600/30 active:scale-95 transition-all"
-                    >
-                        {notifLoading ? <Loader2 size={16} className="animate-spin" /> : <Bell size={16} />}
-                        {notifLoading ? "Đang xử lý..." : "Kích hoạt thông báo trên thiết bị này"}
-                    </button>
+                    {/* Manual Activation Button with State */}
+                    {renderNotifButton()}
 
                     <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
                         <span className="text-sm font-medium">Rằm & Mùng 1 Âm lịch</span>
