@@ -14,19 +14,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ currentTab, onTabChange, children, settings, fontClass, banners }) => {
-  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
-
-  // Carousel Logic
-  useEffect(() => {
-      if (banners.length > 1) {
-          const interval = setInterval(() => {
-              setCurrentBannerIndex(prev => (prev + 1) % banners.length);
-          }, 5000); // 5 seconds per slide
-          return () => clearInterval(interval);
-      } else {
-          setCurrentBannerIndex(0);
-      }
-  }, [banners.length]);
+  
 
   const activeBanner = banners[currentBannerIndex];
 
@@ -64,14 +52,22 @@ const Layout: React.FC<LayoutProps> = ({ currentTab, onTabChange, children, sett
           <div className={`absolute inset-0 transition-colors duration-500 ${settings.darkMode ? 'bg-slate-900/80' : 'bg-black/30'}`}></div>
         </div>
 
-        {/* Global Banner Carousel */}
-        {activeBanner && (
-            <div className={`fixed top-0 max-w-md w-full z-[60] px-4 py-2 flex items-center justify-center gap-2 text-xs font-bold shadow-lg transition-colors duration-500 ${getBannerStyle(activeBanner.type)}`}>
-                {getBannerIcon(activeBanner.type)}
-                <div className="flex-1 overflow-hidden relative h-4">
-                    <span key={activeBanner.id} className="absolute inset-0 animate-in slide-in-from-bottom duration-500 truncate text-center">
-                        {activeBanner.content}
-                    </span>
+        {/* Global Banner Marquee */}
+        {banners.length > 0 && (
+            <div className="fixed top-0 max-w-md w-full z-[60] bg-blue-600 text-white px-4 py-2 shadow-lg overflow-hidden flex items-center">
+                <div className="flex items-center gap-2 shrink-0 z-10 bg-blue-600 pr-2">
+                    <Info size={16} className="animate-pulse" />
+                    <span className="text-xs font-bold uppercase bg-white/20 px-1.5 py-0.5 rounded">Tin Mới</span>
+                </div>
+                
+                <div className="flex-1 overflow-hidden relative h-5">
+                    <div className="animate-marquee text-xs font-bold absolute top-0 left-0 h-full flex items-center">
+                        {banners
+                            .filter(b => b.active)
+                            .map(b => b.content)
+                            .join(' ✦✦✦ ') // Dấu phân cách giữa các tin
+                        }
+                    </div>
                 </div>
             </div>
         )}
