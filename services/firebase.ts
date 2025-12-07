@@ -24,23 +24,28 @@ let db: any;
 let messaging: any = null;
 
 try {
-    // Initialize Firebase
-    app = firebase.initializeApp(firebaseConfig);
-    auth = firebase.auth();
-    
-    // Initialize Firestore
-    db = firebase.firestore();
-    
-    // Initialize Messaging (Client-side only)
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-        try {
-            messaging = firebase.messaging();
-        } catch (e) {
-            console.warn('Firebase Messaging not supported in this browser context');
+    // Chỉ khởi tạo khi có config hợp lệ
+    if (firebaseConfig.apiKey) {
+        app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        
+        // Messaging support
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+            try {
+                messaging = getMessaging(app);
+            } catch (e) {
+                console.warn('Firebase Messaging not supported');
+            }
         }
+    } else {
+        console.warn('Thiếu cấu hình Firebase trong .env. Ứng dụng sẽ chạy ở chế độ offline giới hạn.');
+        // Mock objects để không crash UI
+        auth = { currentUser: null, signOut: async () => {} };
+        db = {};
     }
 } catch (e) {
-    console.error('Lỗi khởi tạo Firebase. Vui lòng kiểm tra file .env', e);
+    console.error('Firebase Init Error:', e);
 }
 
 export { auth, db, messaging };
