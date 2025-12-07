@@ -1,16 +1,32 @@
-
 import { CalendarEvent, AppSettings, LunarDate, User, SystemBanner, AdminPushConfig } from '../types';
 import { HOLIDAYS_LUNAR, HOLIDAYS_SOLAR } from '../constants';
 import { getLunarDate, getSolarDateFromLunar, convertSolar2LunarAlgorithm } from '../utils/lunar';
 import { addDays } from 'date-fns';
-import { 
-  doc, setDoc, getDoc, collection, getDocs, addDoc, updateDoc, deleteDoc, 
-  onSnapshot, query, where, orderBy 
+import {
+  doc, setDoc, getDoc, collection, getDocs, addDoc, updateDoc, deleteDoc,
+  onSnapshot, query, where, orderBy
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
 const STORAGE_KEY_EVENTS = 'vnl_events';
 const STORAGE_KEY_SETTINGS = 'vnl_settings';
+
+// --- HÀM MỚI: CLEAN DATA ---
+/**
+ * Loại bỏ các thuộc tính có giá trị undefined khỏi một đối tượng.
+ * Firestore không hỗ trợ các giá trị undefined.
+ */
+const cleanData = <T extends Record<string, any>>(data: T): Partial<T> => {
+    return Object.entries(data).reduce((acc, [key, value]) => {
+        if (value !== undefined) {
+            // Kiểm tra và làm sạch đệ quy cho các đối tượng lồng nhau (nếu cần thiết, nhưng ở đây chỉ cần làm phẳng)
+            // Hiện tại chỉ xử lý trường hợp giá trị là undefined ở cấp 1
+            acc[key as keyof T] = value;
+        }
+        return acc;
+    }, {} as Partial<T>);
+};
+// --- HẾT HÀM MỚI ---
 
 export const saveEvent = async (event: CalendarEvent): Promise<void> => {
   // Local Save
@@ -28,7 +44,9 @@ export const saveEvent = async (event: CalendarEvent): Promise<void> => {
   // Hybrid Sync: Sync to Firestore immediately if logged in
   if (auth.currentUser) {
       try {
-          await setDoc(doc(db, 'users', auth.currentUser.uid), { events: updated }, { merge: true });
+          // ÁP DỤNG CLEAN DATA: Làm sạch từng sự kiện trước khi lưu
+          const cleanedEvents = updated.map(e => cleanData(e));
+          await setDoc(doc(db, 'users', auth.currentUser.uid), { events: cleanedEvents }, { merge: true });
       } catch (e) {
           console.error("Auto-sync error:", e);
       }
@@ -46,7 +64,9 @@ export const deleteEvent = async (id: string): Promise<void> => {
   // Hybrid Sync
   if (auth.currentUser) {
       try {
-          await setDoc(doc(db, 'users', auth.currentUser.uid), { events: updated }, { merge: true });
+          // ÁP DỤNG CLEAN DATA: Làm sạch từng sự kiện trước khi lưu
+          const cleanedEvents = updated.map(e => cleanData(e));
+          await setDoc(doc(db, 'users', auth.currentUser.uid), { events: cleanedEvents }, { merge: true });
       } catch (e) {
           console.error("Auto-sync error:", e);
       }
@@ -139,17 +159,17 @@ export const getRemindersForDate = (date: Date): { title: string, note?: string,
         // 1. Check Rằm & Mùng 1
         if (settings.reminderSettings.lunar15_1) {
             if (tLunar.day === 1) {
-                 reminders.push({ 
-                     title: config.daysBefore === 0 ? 'Hôm nay là Mùng 1 Âm lịch' : `Sắp tới: Mùng 1 Âm lịch`,
-                     note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`,
-                     type: 'system' 
+                 reminders.push({
+                    title: config.daysBefore === 0 ? 'Hôm nay là Mùng 1 Âm lịch' : `Sắp tới: Mùng 1 Âm lịch`,
+                    note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`,
+                    type: 'system'
                  });
             }
             if (tLunar.day === 15) {
-                 reminders.push({ 
-                     title: config.daysBefore === 0 ? 'Hôm nay là Rằm (15 Âm lịch)' : `Sắp tới: Rằm (15 Âm lịch)`,
-                     note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`,
-                     type: 'system' 
+                 reminders.push({
+                    title: config.daysBefore === 0 ? 'Hôm nay là Rằm (15 Âm lịch)' : `Sắp tới: Rằm (15 Âm lịch)`,
+                    note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`,
+                    type: 'system'
                  });
             }
         }
@@ -158,11 +178,11 @@ export const getRemindersForDate = (date: Date): { title: string, note?: string,
         if (settings.reminderSettings.solarHolidays) {
             HOLIDAYS_SOLAR.forEach(h => {
                 if(h.day === tDay && h.month === tMonth) {
-                    reminders.push({ 
-                        title: config.daysBefore === 0 ? `Hôm nay lễ: ${h.title}` : `Sắp lễ: ${h.title}`,
-                        note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`,
-                        type: 'system' 
-                    });
+                    reminders.push({
+                         title: config.daysBefore === 0 ? `Hôm nay lễ: ${h.title}` : `Sắp lễ: ${h.title}`,
+                         note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`,
+                         type: 'system'
+                     });
                 }
             });
         }
@@ -171,11 +191,11 @@ export const getRemindersForDate = (date: Date): { title: string, note?: string,
         if (settings.reminderSettings.lunarHolidays) {
             HOLIDAYS_LUNAR.forEach(h => {
                 if(h.day === tLunar.day && h.month === tLunar.month) {
-                    reminders.push({ 
-                        title: config.daysBefore === 0 ? `Hôm nay lễ: ${h.title}` : `Sắp lễ: ${h.title}`,
-                        note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`,
-                        type: 'system' 
-                    });
+                    reminders.push({
+                         title: config.daysBefore === 0 ? `Hôm nay lễ: ${h.title}` : `Sắp lễ: ${h.title}`,
+                         note: config.daysBefore === 0 ? undefined : `Còn ${config.daysBefore} ngày`,
+                         type: 'system'
+                     });
                 }
             });
         }
@@ -198,7 +218,7 @@ export const getRemindersForDate = (date: Date): { title: string, note?: string,
 
             if (isEventDay) {
                 const remindersForOffset = evt.reminderConfig.customReminders?.filter(r => r.daysBefore === offset);
-                
+
                 if (offset === 0 && evt.reminderConfig.at7am) {
                     reminders.push({
                         title: `Hôm nay: ${evt.title}`,
@@ -227,17 +247,17 @@ export const getRemindersForDate = (date: Date): { title: string, note?: string,
     return uniqueReminders;
 }
 
-export const getAllUpcomingReminders = (): { 
-    triggerDate: Date; 
-    timeStr: string; 
-    eventTitle: string; 
+export const getAllUpcomingReminders = (): {
+    triggerDate: Date;
+    timeStr: string;
+    eventTitle: string;
     eventDateDisplay: string;
-    note: string; 
-    type: 'system' | 'event' 
+    note: string;
+    type: 'system' | 'event'
 }[] => {
     const settings = getSettings();
     if (!settings.reminderSettings.enabled) return [];
-    
+
     const userEvents = getEvents();
     const today = new Date();
     const lookAheadDays = 60;
@@ -288,7 +308,7 @@ export const getAllUpcomingReminders = (): {
         userEvents.forEach(evt => {
             let isOccurrence = false;
             let dateDisplay = '';
-            
+
             if (evt.type === 'solar') {
                 if (evt.day === tDay && evt.month === tMonth) {
                     isOccurrence = true;
@@ -317,7 +337,7 @@ export const getAllUpcomingReminders = (): {
                         });
                     }
                 }
-                
+
                 if (evt.reminderConfig.customReminders) {
                     evt.reminderConfig.customReminders.forEach(cust => {
                          let triggerDate = addDays(currentDate, -cust.daysBefore);
@@ -356,10 +376,10 @@ export const saveSettings = (settings: AppSettings) => {
 };
 
 export const getSettings = (): AppSettings => {
-  const defaults: AppSettings = { 
-      bgId: 'bg-1', 
-      font: 'inter', 
-      darkMode: false, 
+  const defaults: AppSettings = {
+      bgId: 'bg-1',
+      font: 'inter',
+      darkMode: false,
       primaryColor: '#D91E18',
       weekStart: 'monday',
       reminderSettings: {
@@ -377,7 +397,7 @@ export const getSettings = (): AppSettings => {
   try {
     const data = localStorage.getItem(STORAGE_KEY_SETTINGS);
     if (!data) return defaults;
-    
+
     const parsed = JSON.parse(data);
     let defReminders = parsed.reminderSettings?.defaultReminders;
     if (!defReminders) {
@@ -403,8 +423,8 @@ export const getBackupInfo = async (userId: string) => {
     const docRef = doc(db, 'users', userId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists() && docSnap.data().lastBackup) {
-      return { 
-        exists: true, 
+      return {
+        exists: true,
         lastBackup: new Date(docSnap.data().lastBackup)
       };
     }
@@ -419,8 +439,14 @@ export const backupData = async (userId: string) => {
   try {
     const events = getEvents();
     const settings = getSettings();
-    const dataToBackup = { events, settings, lastBackup: new Date().toISOString() };
-    await setDoc(doc(db, 'users', userId), dataToBackup, { merge: true });
+
+    // ÁP DỤNG CLEAN DATA: Làm sạch sự kiện và cài đặt trước khi backup
+    const cleanedEvents = events.map(e => cleanData(e));
+    const cleanedSettings = cleanData(settings);
+
+    const dataToBackup = { events: cleanedEvents, settings: cleanedSettings, lastBackup: new Date().toISOString() };
+    
+    await setDoc(doc(db, 'users', userId), cleanData(dataToBackup), { merge: true });
     return true;
   } catch (error) {
     console.error("Backup error:", error);
@@ -448,19 +474,14 @@ export const restoreData = async (userId: string) => {
 
 export const saveUserProfile = async (userId: string, data: Partial<User>) => {
   try {
-     const { name, dateOfBirth, phoneNumber, address, email } = data;
-     const payload: any = {};
-     if (name !== undefined) payload.name = name;
-     if (email !== undefined) payload.email = email;
-     if (dateOfBirth !== undefined) payload.dateOfBirth = dateOfBirth;
-     if (phoneNumber !== undefined) payload.phoneNumber = phoneNumber;
-     if (address !== undefined) payload.address = address;
+      // ÁP DỤNG CLEAN DATA: Thay thế logic kiểm tra undefined thủ công bằng hàm cleanData
+      const cleanedPayload = cleanData(data);
 
-     await setDoc(doc(db, 'users', userId), payload, { merge: true });
-     return true;
+      await setDoc(doc(db, 'users', userId), cleanedPayload, { merge: true });
+      return true;
   } catch (e) {
-     console.error("Error saving profile:", e);
-     return false;
+    console.error("Error saving profile:", e);
+    return false;
   }
 };
 
@@ -471,11 +492,11 @@ export const getUserProfile = async (userId: string): Promise<Partial<User>> => 
     if (docSnap.exists()) {
        const data = docSnap.data();
        return {
-          name: data.name,
-          role: data.role || 'user',
-          dateOfBirth: data.dateOfBirth,
-          phoneNumber: data.phoneNumber,
-          address: data.address
+         name: data.name,
+         role: data.role || 'user',
+         dateOfBirth: data.dateOfBirth,
+         phoneNumber: data.phoneNumber,
+         address: data.address
        } as Partial<User>;
     }
     return { role: 'user' };
@@ -489,7 +510,7 @@ export const getAdminStats = async () => {
     try {
         const usersSnap = await getDocs(collection(db, 'users'));
         const userCount = usersSnap.size;
-        
+
         let eventCountToday = 0;
         const today = new Date();
         const d = today.getDate();
@@ -529,7 +550,7 @@ export const getAllUsers = async (): Promise<User[]> => {
                 role: data.role || 'user',
                 dateOfBirth: data.dateOfBirth,
                 phoneNumber: data.phoneNumber,
-                createdAt: data.createdAt 
+                createdAt: data.createdAt
             });
         });
         return users;
@@ -567,7 +588,8 @@ export const getAllBanners = async (): Promise<SystemBanner[]> => {
 export const addSystemBanner = async (banner: Partial<SystemBanner>): Promise<boolean> => {
     try {
         await addDoc(collection(db, 'system_banners'), {
-            ...banner,
+            // ÁP DỤNG CLEAN DATA TẠM THỜI CHO BANNER
+            ...cleanData(banner),
             active: true,
             createdAt: new Date().toISOString()
         });
@@ -601,7 +623,8 @@ export const getAllPushConfigs = async (): Promise<AdminPushConfig[]> => {
 export const addPushConfig = async (config: Partial<AdminPushConfig>): Promise<boolean> => {
     try {
         await addDoc(collection(db, 'admin_push_configs'), {
-            ...config,
+            // ÁP DỤNG CLEAN DATA TẠM THỜI CHO PUSH CONFIG
+            ...cleanData(config),
             isActive: true,
             createdAt: new Date().toISOString()
         });
