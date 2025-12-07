@@ -14,7 +14,19 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ currentTab, onTabChange, children, settings, fontClass, banners }) => {
-  
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+
+  // Carousel Logic
+  useEffect(() => {
+      if (banners.length > 1) {
+          const interval = setInterval(() => {
+              setCurrentBannerIndex(prev => (prev + 1) % banners.length);
+          }, 5000); // 5 seconds per slide
+          return () => clearInterval(interval);
+      } else {
+          setCurrentBannerIndex(0);
+      }
+  }, [banners.length]);
 
   const activeBanner = banners[currentBannerIndex];
 
