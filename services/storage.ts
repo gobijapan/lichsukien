@@ -1,4 +1,3 @@
-
 import { CalendarEvent, AppSettings, LunarDate, User, SystemBanner, AdminPushConfig } from '../types';
 import { HOLIDAYS_LUNAR, HOLIDAYS_SOLAR } from '../constants';
 import { getLunarDate, getSolarDateFromLunar, convertSolar2LunarAlgorithm } from '../utils/lunar';
@@ -26,9 +25,11 @@ export const saveEvent = async (event: CalendarEvent): Promise<void> => {
   localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(updated));
 
   // Hybrid Sync: Sync to Firestore immediately if logged in
-  if (auth.currentUser) {
+  if (auth.currentUser && db) {
+      console.log('[SYNC] Đang đồng bộ events lên Firestore...');
       try {
           await setDoc(doc(db, 'users', auth.currentUser.uid), { events: updated }, { merge: true });
+          console.log('[SYNC] Đồng bộ thành công!');
       } catch (e) {
           console.error("Auto-sync error:", e);
       }
@@ -44,9 +45,11 @@ export const deleteEvent = async (id: string): Promise<void> => {
   localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(updated));
 
   // Hybrid Sync
-  if (auth.currentUser) {
+  if (auth.currentUser && db) {
+      console.log('[SYNC] Đang đồng bộ xóa event lên Firestore...');
       try {
           await setDoc(doc(db, 'users', auth.currentUser.uid), { events: updated }, { merge: true });
+          console.log('[SYNC] Đồng bộ thành công!');
       } catch (e) {
           console.error("Auto-sync error:", e);
       }
@@ -399,6 +402,7 @@ export const getSettings = (): AppSettings => {
 };
 
 export const getBackupInfo = async (userId: string) => {
+  if (!db) return { exists: false, lastBackup: null };
   try {
     const docRef = doc(db, 'users', userId);
     const docSnap = await getDoc(docRef);
@@ -416,6 +420,7 @@ export const getBackupInfo = async (userId: string) => {
 }
 
 export const backupData = async (userId: string) => {
+  if (!db) return false;
   try {
     const events = getEvents();
     const settings = getSettings();
@@ -429,6 +434,7 @@ export const backupData = async (userId: string) => {
 }
 
 export const restoreData = async (userId: string) => {
+  if (!db) return false;
   try {
     const docRef = doc(db, 'users', userId);
     const docSnap = await getDoc(docRef);
@@ -447,6 +453,7 @@ export const restoreData = async (userId: string) => {
 }
 
 export const saveUserProfile = async (userId: string, data: Partial<User>) => {
+  if (!db) return false;
   try {
      const { name, dateOfBirth, phoneNumber, address, email } = data;
      const payload: any = {};
@@ -465,6 +472,7 @@ export const saveUserProfile = async (userId: string, data: Partial<User>) => {
 };
 
 export const getUserProfile = async (userId: string): Promise<Partial<User>> => {
+  if (!db) return { role: 'user' };
   try {
     const docRef = doc(db, 'users', userId);
     const docSnap = await getDoc(docRef);
@@ -485,7 +493,9 @@ export const getUserProfile = async (userId: string): Promise<Partial<User>> => 
   }
 };
 
+// --- ADMIN STATS ---
 export const getAdminStats = async () => {
+    if (!db) return { users: 0, todayEvents: 0 };
     try {
         const usersSnap = await getDocs(collection(db, 'users'));
         const userCount = usersSnap.size;
@@ -517,6 +527,7 @@ export const getAdminStats = async () => {
 }
 
 export const getAllUsers = async (): Promise<User[]> => {
+    if (!db) return [];
     try {
         const usersSnap = await getDocs(collection(db, 'users'));
         const users: User[] = [];
@@ -540,7 +551,6 @@ export const getAllUsers = async (): Promise<User[]> => {
 }
 
 // --- ADMIN: SYSTEM BANNER (LIST) ---
-// Sort by createdAt desc to show newest first
 export const subscribeToBanners = (callback: (banners: SystemBanner[]) => void) => {
     if (!db) return () => {};
     try {
@@ -558,6 +568,7 @@ export const subscribeToBanners = (callback: (banners: SystemBanner[]) => void) 
 }
 
 export const getAllBanners = async (): Promise<SystemBanner[]> => {
+    if (!db) return [];
     try {
         const snap = await getDocs(query(collection(db, 'system_banners'), orderBy('createdAt', 'desc')));
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SystemBanner));
@@ -565,6 +576,7 @@ export const getAllBanners = async (): Promise<SystemBanner[]> => {
 }
 
 export const addSystemBanner = async (banner: Partial<SystemBanner>): Promise<boolean> => {
+    if (!db) return false;
     try {
         await addDoc(collection(db, 'system_banners'), {
             ...banner,
@@ -576,6 +588,7 @@ export const addSystemBanner = async (banner: Partial<SystemBanner>): Promise<bo
 }
 
 export const deleteSystemBanner = async (id: string): Promise<boolean> => {
+    if (!db) return false;
     try {
         await deleteDoc(doc(db, 'system_banners', id));
         return true;
@@ -583,6 +596,7 @@ export const deleteSystemBanner = async (id: string): Promise<boolean> => {
 }
 
 export const toggleSystemBanner = async (id: string, currentState: boolean): Promise<boolean> => {
+    if (!db) return false;
     try {
         await updateDoc(doc(db, 'system_banners', id), { active: !currentState });
         return true;
@@ -590,8 +604,8 @@ export const toggleSystemBanner = async (id: string, currentState: boolean): Pro
 }
 
 // --- ADMIN: PUSH CONFIGS (LIST) ---
-// Sort by createdAt desc to show newest first
 export const getAllPushConfigs = async (): Promise<AdminPushConfig[]> => {
+    if (!db) return [];
     try {
         const snap = await getDocs(query(collection(db, 'admin_push_configs'), orderBy('createdAt', 'desc')));
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminPushConfig));
@@ -599,6 +613,7 @@ export const getAllPushConfigs = async (): Promise<AdminPushConfig[]> => {
 }
 
 export const addPushConfig = async (config: Partial<AdminPushConfig>): Promise<boolean> => {
+    if (!db) return false;
     try {
         await addDoc(collection(db, 'admin_push_configs'), {
             ...config,
@@ -610,6 +625,7 @@ export const addPushConfig = async (config: Partial<AdminPushConfig>): Promise<b
 }
 
 export const deletePushConfig = async (id: string): Promise<boolean> => {
+    if (!db) return false;
     try {
         await deleteDoc(doc(db, 'admin_push_configs', id));
         return true;
@@ -617,6 +633,7 @@ export const deletePushConfig = async (id: string): Promise<boolean> => {
 }
 
 export const togglePushConfig = async (id: string, currentState: boolean): Promise<boolean> => {
+    if (!db) return false;
     try {
         await updateDoc(doc(db, 'admin_push_configs', id), { isActive: !currentState });
         return true;
